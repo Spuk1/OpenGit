@@ -47,6 +47,19 @@ export default function CommitPanel() {
 
   useEffect(() => {
     loadChanges();
+
+    const onFocus = () => {
+      loadChanges();
+    };
+
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
+  useEffect(() => {
+    loadChanges();
   }, [selectedBranch, selectedRepository]);
 
   return (
