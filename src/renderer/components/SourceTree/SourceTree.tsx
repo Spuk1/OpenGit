@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './SourceTree.css';
 import { GoLog, GoQuote } from 'react-icons/go';
 import {
@@ -16,75 +16,72 @@ const itemRenderer = (treeNode: TreeNode) => (
   <FileItemWithFileIcon treeNode={treeNode} />
 );
 
-const gitRepoTree: TreeNode = {
-  type: 'directory',
-  uri: '/',
-  expanded: true,
-  children: [
-    {
-      type: 'directory',
-      uri: '/branches',
-      expanded: true,
-      children: [
-        {
-          type: 'directory',
-          uri: '/branches/release',
-          expanded: false,
-          children: [
-            { type: 'file', uri: '/branches/release/v1.0.0' },
-            { type: 'file', uri: '/branches/release/v1.1.0' },
-            { type: 'file', uri: '/branches/release/v2.0.0' },
-          ],
-        },
-        {
-          type: 'directory',
-          uri: '/branches/feature',
-          expanded: false,
-          children: [
-            { type: 'file', uri: '/branches/feature/login-refactor' },
-            { type: 'file', uri: '/branches/feature/add-dark-mode' },
-            { type: 'file', uri: '/branches/feature/improve-performance' },
-          ],
-        },
-        { type: 'file', uri: '/branches/main' },
-        { type: 'file', uri: '/branches/develop' },
-      ],
-    },
-    {
-      type: 'directory',
-      uri: '/remote',
-      expanded: true,
-      children: [
-        {
-          type: 'directory',
-          uri: '/remote/release',
-          expanded: false,
-          children: [
-            { type: 'file', uri: '/remote/release/v1.0.0' },
-            { type: 'file', uri: '/remote/release/v1.1.0' },
-            { type: 'file', uri: '/remote/release/v2.0.0' },
-          ],
-        },
-        {
-          type: 'directory',
-          uri: '/remote/feature',
-          expanded: false,
-          children: [
-            { type: 'file', uri: '/remote/feature/login-refactor' },
-            { type: 'file', uri: '/remote/feature/add-dark-mode' },
-            { type: 'file', uri: '/remote/feature/improve-performance' },
-          ],
-        },
-        { type: 'file', uri: '/remote/main' },
-        { type: 'file', uri: '/remote/develop' },
-      ],
-    },
-  ],
-};
+function branchesToTree(local: string[], remote: string[]): TreeNode {
+  const createNode = (uri: string, isFile = false): TreeNode => ({
+    type: isFile ? 'file' : 'directory',
+    uri,
+    expanded: false,
+    children: [],
+  });
+
+  const insertBranch = (
+    root: TreeNode,
+    branchPath: string,
+    basePath: string,
+  ) => {
+    const parts = branchPath.split('/');
+    let current = root;
+    let currentUri = basePath;
+
+    for (let i = 0; i < parts.length; i += 1) {
+      const part = parts[i];
+      currentUri += `/${part}`;
+      let existing = null;
+      if (current && current.children) {
+        // eslint-disable-next-line no-loop-func
+        existing = current.children.find((child) => child.uri === currentUri);
+      }
+      if (!existing) {
+        existing = createNode(currentUri, i === parts.length - 1);
+        current.children?.push(existing);
+      }
+
+      if (!existing.children) {
+        existing.children = [];
+      }
+
+      current = existing;
+    }
+  };
+
+  const localRoot: TreeNode = {
+    type: 'directory',
+    uri: '/branches',
+    expanded: true,
+    children: [],
+  };
+
+  const remoteRoot: TreeNode = {
+    type: 'directory',
+    uri: '/remote',
+    expanded: true,
+    children: [],
+  };
+
+  local.forEach((branch) => insertBranch(localRoot, branch, '/branches'));
+  remote.forEach((branch) => insertBranch(remoteRoot, branch, '/remote'));
+
+  return {
+    type: 'directory',
+    uri: '/',
+    expanded: true,
+    children: [localRoot, remoteRoot],
+  };
+}
 
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
-  const [tree, setTree] = useState<TreeNode | undefined>(gitRepoTree);
+  const [tree, setTree] = useState<TreeNode | undefined>(undefined);
   const [selectedBranch, SetSelectedBranch] =
     useState<string>('/release/v2.0.0');
 
@@ -99,6 +96,23 @@ export default function SourceTree() {
       }),
     );
   };
+
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        // const repoPath: string =
+        //   await window.electron.ipcRenderer.invoke('get-repo-path');
+        const { local, remote } =
+          await window.electron.ipcRenderer.invoke('list-branches');
+        const treeData = branchesToTree(local, remote);
+        setTree(treeData);
+      } catch (err) {
+        console.error('Failed to load branches', err);
+      }
+    };
+
+    loadBranches();
+  }, []);
 
   return (
     <div className="SourceTreeContainer">
