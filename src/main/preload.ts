@@ -10,7 +10,14 @@ export type Channels =
   | 'stash'
   | 'add-branch'
   | 'get-repo-path'
-  | 'list-branches';
+  | 'list-branches'
+  | 'checkout-branch'
+  | 'get-branch-commits'
+  | 'set-selected-repository'
+  | 'stage-file'
+  | 'unstage-file'
+  | 'list-changes'
+  | 'commit';
 
 const electronHandler = {
   ipcRenderer: {
