@@ -101,20 +101,22 @@ export default function CommitPanel() {
           </ul>
         </div>
       </div>
-      <textarea
-        placeholder="Commit message"
-        value={commitMessage}
-        onChange={(e) => setCommitMessage(e.target.value)}
-      />
-      {
-        // eslint-disable-next-line react/button-has-type
-        <button
-          onClick={handleCommit}
-          disabled={!commitMessage.trim() || staged.length === 0}
-        >
-          Commit
-        </button>
-      }
+      <div className="CommitBox">
+        <textarea
+          placeholder="Commit message"
+          value={commitMessage}
+          onChange={(e) => setCommitMessage(e.target.value)}
+        />
+        {
+          // eslint-disable-next-line react/button-has-type
+          <button
+            onClick={handleCommit}
+            disabled={!commitMessage.trim() || staged.length === 0}
+          >
+            Commit
+          </button>
+        }
+      </div>
     </div>
   );
 }
