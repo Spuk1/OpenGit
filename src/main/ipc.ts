@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { exec } from 'child_process';
 import { dialog, ipcMain, IpcMainInvokeEvent } from 'electron';
 import path from 'path';
 
@@ -68,14 +69,16 @@ ipcMain.handle('stash', async (_event: IpcMainInvokeEvent): Promise<void> => {
   await execa('git', ['stash'], { cwd: selectedRepoPath });
 });
 
-ipcMain.handle(
-  'checkout',
-  async (_event: IpcMainInvokeEvent): Promise<void> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    await execa('git', ['checkout'], { cwd: selectedRepoPath });
-  },
-);
+ipcMain.handle('checkout', async (_event: IpcMainInvokeEvent): Promise<any> => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  try {
+    const resp = await execa('git', ['checkout'], { cwd: selectedRepoPath });
+    return resp;
+  } catch (error: any) {
+    return error;
+  }
+});
 
 ipcMain.handle(
   'add-branch',
