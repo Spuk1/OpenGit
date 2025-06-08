@@ -11,6 +11,7 @@ import './Utils.css';
 import VSpacer from '../VSpacer/VSpacer';
 import Header from '../Header/Header';
 import { useGit } from '../../ContextManager/GitContext';
+import Modal from '../Modal/Modal';
 
 export default function Utils() {
   const { setSelectedRepository, addRepository } = useGit();
@@ -67,6 +68,12 @@ export default function Utils() {
         Icon={LuGitBranchPlus}
         onClick={handleAddBranch}
       />
+      {false && (
+        <Modal>
+          {/* TODO: fill with data depending on the action */}
+          <div className="alert" />
+        </Modal>
+      )}
     </div>
   );
 }
