@@ -73,12 +73,12 @@ export default function CommitPanel() {
     <div className="CommitPanel">
       <div className="ChangesSection">
         <div className="ChangesGroup">
-          <h3>Staged</h3>
+          <h3>Unstaged</h3>
           <ul className="ChangeList">
-            {staged.map((file) => (
+            {unstaged.map((file) => (
               <li
                 key={file}
-                onClick={() => unstageFile(file)}
+                onClick={() => stageFile(file)}
                 className="ChangeItem"
               >
                 {file}
@@ -87,12 +87,12 @@ export default function CommitPanel() {
           </ul>
         </div>
         <div className="ChangesGroup">
-          <h3>Unstaged</h3>
+          <h3>Staged</h3>
           <ul className="ChangeList">
-            {unstaged.map((file) => (
+            {staged.map((file) => (
               <li
                 key={file}
-                onClick={() => stageFile(file)}
+                onClick={() => unstageFile(file)}
                 className="ChangeItem"
               >
                 {file}
