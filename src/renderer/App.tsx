@@ -3,6 +3,7 @@ import './App.css';
 import Utils from './components/Utils/Utils';
 import PanelContainer from './components/Panel/PanelContainer';
 import Tabs from './components/Tabs/Tabs';
+import { GitProvider } from './ContextManager/GitContext';
 
 function Main() {
   return (
@@ -18,7 +19,14 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Main />} />
+        <Route
+          path="/"
+          element={
+            <GitProvider>
+              <Main />
+            </GitProvider>
+          }
+        />
       </Routes>
     </Router>
   );

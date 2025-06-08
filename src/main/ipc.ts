@@ -36,6 +36,14 @@ ipcMain.handle(
   },
 );
 
+ipcMain.handle(
+  'set-selected-repository',
+  async (_event: IpcMainInvokeEvent, repo: string): Promise<void> => {
+    if (!repo) return;
+    selectedRepoPath = repo;
+  },
+);
+
 ipcMain.handle('fetch', async (_event: IpcMainInvokeEvent): Promise<void> => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
@@ -61,6 +69,15 @@ ipcMain.handle('stash', async (_event: IpcMainInvokeEvent): Promise<void> => {
 });
 
 ipcMain.handle(
+  'checkout',
+  async (_event: IpcMainInvokeEvent): Promise<void> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    await execa('git', ['checkout'], { cwd: selectedRepoPath });
+  },
+);
+
+ipcMain.handle(
   'add-branch',
   async (_event: IpcMainInvokeEvent, branchName: string): Promise<void> => {
     if (!selectedRepoPath) throw new Error('No repository selected');
@@ -70,31 +87,6 @@ ipcMain.handle(
     });
   },
 );
-
-async function getBranches(
-  repoPath: string,
-): Promise<{ local: string[]; remote: string[] }> {
-  const { execa } = await initExeca();
-  const { stdout: localOut } = await execa('git', ['branch'], {
-    cwd: repoPath,
-  });
-  const { stdout: remoteOut } = await execa('git', ['branch', '-r'], {
-    cwd: repoPath,
-  });
-
-  const local = localOut
-    .split('\n')
-    .map((l) => l.replace(/^[* ]+/, '').trim())
-    .filter(Boolean);
-
-  const remote = remoteOut
-    .split('\n')
-    .map((r) => r.trim().replace(/^origin\//, '')) // remove "origin/" prefix
-    .filter((r) => !r.includes('->')) // filter out symbolic refs like origin/HEAD -> origin/main
-    .filter(Boolean);
-
-  return { local, remote };
-}
 
 ipcMain.handle('get-repo-path', () => {
   if (!selectedRepoPath) throw new Error('No repo selected');
@@ -127,3 +119,89 @@ ipcMain.handle(
     return { local, remote };
   },
 );
+
+ipcMain.handle('get-branch-commits', async () => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  const { stdout } = await execa(
+    'git',
+    ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'],
+    { cwd: selectedRepoPath },
+  );
+  const branches = stdout.split('\n').filter(Boolean);
+  const commitCounts: Record<string, number> = {};
+
+  for (const branchName of branches) {
+    // eslint-disable-next-line no-await-in-loop
+    const { stdout: count } = await execa(
+      'git',
+      ['rev-list', '--count', branchName],
+      { cwd: selectedRepoPath },
+    );
+    commitCounts[branchName] = parseInt(count.trim(), 10);
+  }
+
+  return commitCounts;
+});
+
+ipcMain.handle('checkout-branch', async (_event, branch: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  await execa('git', ['checkout', branch], { cwd: selectedRepoPath });
+});
+
+ipcMain.handle(
+  'merge-branch',
+  async (_event, sourceBranch: string, targetBranch: string) => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    await execa('git', ['checkout', targetBranch], { cwd: selectedRepoPath });
+    await execa('git', ['merge', sourceBranch], { cwd: selectedRepoPath });
+  },
+);
+
+ipcMain.handle('list-changes', async () => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+
+  const { stdout } = await execa('git', ['status', '--porcelain'], {
+    cwd: selectedRepoPath,
+  });
+
+  const unstagedFiles = stdout
+    .split('\n')
+    .filter(Boolean)
+    .filter((line) => line[1] !== ' ') // 2nd char = working tree status (unstaged)
+    .map((line) => line.slice(3).trim());
+
+  return unstagedFiles;
+});
+
+ipcMain.handle('stage-file', async (_event, file: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  console.log('Staging file:', file);
+  await execa('git', ['add', file], { cwd: selectedRepoPath });
+});
+
+ipcMain.handle('unstage-file', async (_event, file: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  console.log('Unstaging file:', file);
+  await execa('git', ['reset', 'HEAD', file], { cwd: selectedRepoPath });
+});
+
+ipcMain.handle('commit', async (_event, message: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  await execa('git', ['commit', '-m', message], { cwd: selectedRepoPath });
+});
+
+ipcMain.handle('list-staged', async () => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  const { stdout } = await execa('git', ['diff', '--cached', '--name-only'], {
+    cwd: selectedRepoPath,
+  });
+  return stdout.split('\n').filter(Boolean);
+});
