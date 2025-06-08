@@ -56,6 +56,10 @@ export function GitProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('repositories', JSON.stringify(newRepos));
   }
 
+  useEffect(() => {
+    localStorage.setItem('selectedBranch', selectedBranch);
+  }, [selectedBranch]);
+
   return (
     <GitContext.Provider
       value={{
