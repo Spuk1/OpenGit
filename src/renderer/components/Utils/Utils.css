@@ -1,0 +1,6 @@
+.UtilsContainer {
+  display: flex;
+  flex-direction: row;
+  border: 0.1rem #3f3e46 solid;
+  height: 6vh;
+}

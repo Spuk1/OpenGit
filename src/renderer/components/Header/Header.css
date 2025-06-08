@@ -1,0 +1,16 @@
+.repository {
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.branch {
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.Header {
+  padding: 0.2rem 7vw;
+  border: 0.1rem solid rgba(91, 92, 92, 0.692);
+  background: #2c323a;
+  margin: -1px;
+}

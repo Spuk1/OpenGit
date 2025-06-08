@@ -1,0 +1,18 @@
+.IconButtonContainer {
+  font-size: 0.8rem;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.IconButtonIcon {
+  height: 2rem;
+  width: 2rem;
+}
+
+.IconButtonContainer:hover {
+  opacity: 0.8;
+  cursor: pointer;
+}
