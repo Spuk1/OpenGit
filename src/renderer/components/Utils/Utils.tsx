@@ -10,13 +10,16 @@ import IconButton from '../IconButton/IconButton';
 import './Utils.css';
 import VSpacer from '../VSpacer/VSpacer';
 import Header from '../Header/Header';
+import { useGit } from '../../ContextManager/GitContext';
 
 export default function Utils() {
+  const { setSelectedRepository, addRepository } = useGit();
   const handleSelectFile = async () => {
     const filePaths =
       await window.electron.ipcRenderer.invoke('open-file-dialog');
     if (filePaths?.length) {
-      console.log('Selected:', filePaths);
+      setSelectedRepository(filePaths[0]);
+      addRepository(filePaths[0]);
     }
   };
 
