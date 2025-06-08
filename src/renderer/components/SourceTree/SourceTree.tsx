@@ -85,12 +85,7 @@ function branchesToTree(local: string[], remote: string[]): TreeNode {
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
   const [tree, setTree] = useState<TreeNode | undefined>(undefined);
-  const {
-    selectedRepository,
-    setSelectedRepository,
-    setSelectedBranch,
-    selectedBranch,
-  } = useGit();
+  const { selectedRepository, setSelectedBranch, selectedBranch } = useGit();
 
   const refreshBranches = async () => {
     try {
