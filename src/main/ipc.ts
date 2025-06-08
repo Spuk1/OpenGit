@@ -163,25 +163,31 @@ ipcMain.handle(
 ipcMain.handle('list-changes', async () => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
+
   const { stdout } = await execa('git', ['status', '--porcelain'], {
     cwd: selectedRepoPath,
   });
-  const files = stdout
+
+  const unstagedFiles = stdout
     .split('\n')
     .filter(Boolean)
+    .filter((line) => line[1] !== ' ') // 2nd char = working tree status (unstaged)
     .map((line) => line.slice(3).trim());
-  return files;
+
+  return unstagedFiles;
 });
 
 ipcMain.handle('stage-file', async (_event, file: string) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
+  console.log('Staging file:', file);
   await execa('git', ['add', file], { cwd: selectedRepoPath });
 });
 
 ipcMain.handle('unstage-file', async (_event, file: string) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
+  console.log('Unstaging file:', file);
   await execa('git', ['reset', 'HEAD', file], { cwd: selectedRepoPath });
 });
 
@@ -189,4 +195,13 @@ ipcMain.handle('commit', async (_event, message: string) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
   await execa('git', ['commit', '-m', message], { cwd: selectedRepoPath });
+});
+
+ipcMain.handle('list-staged', async () => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  const { stdout } = await execa('git', ['diff', '--cached', '--name-only'], {
+    cwd: selectedRepoPath,
+  });
+  return stdout.split('\n').filter(Boolean);
 });
