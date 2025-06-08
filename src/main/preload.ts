@@ -8,7 +8,9 @@ export type Channels =
   | 'pull'
   | 'push'
   | 'stash'
-  | 'add-branch';
+  | 'add-branch'
+  | 'get-repo-path'
+  | 'list-branches';
 
 const electronHandler = {
   ipcRenderer: {
