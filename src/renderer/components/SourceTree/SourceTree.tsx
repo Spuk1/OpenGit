@@ -11,18 +11,21 @@ import '@sinm/react-file-tree/styles.css';
 import FileItemWithFileIcon from '@sinm/react-file-tree/lib/FileItemWithFileIcon';
 import '@sinm/react-file-tree/icons.css';
 import Divider from '../Divider/Divider';
+import { useGit } from '../../ContextManager/GitContext';
 
 const itemRenderer = (treeNode: TreeNode) => (
   <FileItemWithFileIcon treeNode={treeNode} />
 );
 
 function branchesToTree(local: string[], remote: string[]): TreeNode {
-  const createNode = (uri: string, isFile = false): TreeNode => ({
-    type: isFile ? 'file' : 'directory',
-    uri,
-    expanded: false,
-    children: [],
-  });
+  const createNode = (uri: string, isFile = false): TreeNode => {
+    return {
+      type: isFile ? 'file' : 'directory',
+      uri,
+      expanded: false,
+      children: [],
+    };
+  };
 
   const insertBranch = (
     root: TreeNode,
@@ -82,12 +85,34 @@ function branchesToTree(local: string[], remote: string[]): TreeNode {
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
   const [tree, setTree] = useState<TreeNode | undefined>(undefined);
-  const [selectedBranch, SetSelectedBranch] =
-    useState<string>('/release/v2.0.0');
+  const {
+    selectedRepository,
+    setSelectedRepository,
+    setSelectedBranch,
+    selectedBranch,
+  } = useGit();
 
-  const toggleExpanded: FileTreeProps['onItemClick'] = (treeNode: TreeNode) => {
+  const refreshBranches = async () => {
+    try {
+      const { local, remote } =
+        await window.electron.ipcRenderer.invoke('list-branches');
+      const treeData = branchesToTree(local, remote);
+      setTree(treeData);
+    } catch (err) {
+      console.error('Failed to load branches', err);
+    }
+  };
+
+  const toggleExpanded: FileTreeProps['onItemClick'] = async (
+    treeNode: TreeNode,
+  ) => {
     if (treeNode.type !== 'directory') {
-      SetSelectedBranch(treeNode.uri);
+      setSelectedBranch(treeNode.uri);
+      await window.electron.ipcRenderer.invoke(
+        'checkout-branch',
+        treeNode.uri.replace(/^\/branches\//, '').replace(/^\/remote\//, ''),
+      );
+      await refreshBranches();
       return;
     }
     setTree((_tree) =>
@@ -98,21 +123,11 @@ export default function SourceTree() {
   };
 
   useEffect(() => {
-    const loadBranches = async () => {
-      try {
-        // const repoPath: string =
-        //   await window.electron.ipcRenderer.invoke('get-repo-path');
-        const { local, remote } =
-          await window.electron.ipcRenderer.invoke('list-branches');
-        const treeData = branchesToTree(local, remote);
-        setTree(treeData);
-      } catch (err) {
-        console.error('Failed to load branches', err);
-      }
-    };
-
-    loadBranches();
-  }, []);
+    // without timeout local branches are requested to early
+    setTimeout(() => {
+      refreshBranches();
+    }, 100);
+  }, [selectedRepository]);
 
   return (
     <div className="SourceTreeContainer">
@@ -150,7 +165,7 @@ export default function SourceTree() {
         onItemClick={toggleExpanded}
         itemRenderer={itemRenderer}
         activatedUri={selectedBranch}
-        draggable // TODO: open context menu on release
+        draggable
       />
       <Divider />
     </div>
