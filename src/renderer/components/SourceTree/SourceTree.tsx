@@ -102,11 +102,19 @@ export default function SourceTree() {
     treeNode: TreeNode,
   ) => {
     if (treeNode.type !== 'directory') {
-      setSelectedBranch(treeNode.uri);
-      await window.electron.ipcRenderer.invoke(
-        'checkout-branch',
-        treeNode.uri.replace(/^\/branches\//, '').replace(/^\/remote\//, ''),
-      );
+      window.electron.ipcRenderer
+        .invoke(
+          'checkout-branch',
+          treeNode.uri.replace(/^\/branches\//, '').replace(/^\/remote\//, ''),
+        )
+        .then((resp) => {
+          setSelectedBranch(treeNode.uri);
+          return resp;
+        })
+        .catch((err) => {
+          // eslint-disable-next-line no-alert
+          alert(err);
+        });
       await refreshBranches();
       return;
     }
