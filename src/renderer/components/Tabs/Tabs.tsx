@@ -8,15 +8,14 @@ export default function Tabs() {
 
   useEffect(() => {
     setTabs(
-      repositories.map((repo) => {
-        const arr = repo.split('/');
+      repositories.map((repo, i) => {
         return (
           <Tab
-            key={repo}
-            name={arr[arr.length - 1]}
-            active={selectedRepository === arr[arr.length - 1]}
+            key={repo.name}
+            name={repo.name}
+            active={selectedRepository.name === repo.name}
             onClick={() => {
-              setSelectedRepository(repo);
+              setSelectedRepository(i);
             }}
           />
         );

@@ -4,12 +4,7 @@ import { useGit } from '../../ContextManager/GitContext';
 import './Header.css';
 
 export default function Header() {
-  const { selectedRepository, selectedBranch } = useGit();
-
-  function getRepoName(): string {
-    const arr = selectedRepository.split('/');
-    return arr[arr.length - 1];
-  }
+  const { selectedRepository, selectedBranch, action } = useGit();
 
   function getBranch(): string {
     const arr = selectedBranch.split('/');
@@ -18,12 +13,12 @@ export default function Header() {
 
   return (
     <div className="Header">
-      <div className="repository">{getRepoName()}</div>
+      <div className="repository">{selectedRepository.name}</div>
       <div>
         <span>
           <GoGitBranch />
         </span>
-        <span className="branch">{getBranch()}</span>
+        <span className="branch">{action || getBranch()}</span>
       </div>
     </div>
   );
