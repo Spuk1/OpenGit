@@ -9,10 +9,15 @@ import {
 
 export enum GitAction {
   Commit = 'comitting',
+  CommitFinished = 'comit finsihed',
   Push = 'pushing',
+  PushFinshed = 'push finished',
   Pull = 'pulling',
+  PullFinished = 'pull finished',
   Fetch = 'fetching',
+  FetchFinished = 'fetch finished',
   Stash = 'stashing',
+  StashFinished = 'stash finished',
   None = 0,
 }
 
