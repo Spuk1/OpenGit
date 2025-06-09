@@ -35,7 +35,7 @@ type GitContextType = {
   selectedBranch: string;
   setSelectedBranch: (branch: string) => void;
   action: GitAction | null;
-  setAction: (action: GitAction | null) => void;
+  setAction: (action: GitAction) => void;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
@@ -43,7 +43,7 @@ const GitContext = createContext<GitContextType | undefined>(undefined);
 export function GitProvider({ children }: { children: ReactNode }) {
   const [selectedRepository, setSelectedRepository] = useState<number>(0);
   const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [action, setAction] = useState<GitAction | null>(null);
+  const [action, setAction] = useState<GitAction>(GitAction.None);
 
   function getSelectedRepository() {
     const repository = localStorage.getItem('selectedRepository');
