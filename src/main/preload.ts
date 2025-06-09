@@ -18,7 +18,9 @@ export type Channels =
   | 'unstage-file'
   | 'list-changes'
   | 'commit'
-  | 'list-staged';
+  | 'list-staged'
+  | 'list-stashes'
+  | 'use-stash';
 
 const electronHandler = {
   ipcRenderer: {
