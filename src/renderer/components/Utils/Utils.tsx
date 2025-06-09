@@ -135,7 +135,7 @@ export default function Utils() {
 
   const handleStash = async () => {
     if (commitMessage.length === 0) {
-      alert('Please enter a commit message');
+      alert('Please enter a stash name');
       return;
     }
     const files = unstagedFiles

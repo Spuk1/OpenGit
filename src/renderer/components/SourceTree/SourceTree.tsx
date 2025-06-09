@@ -144,11 +144,11 @@ export default function SourceTree() {
   const toggleExpanded: FileTreeProps['onItemClick'] = async (
     treeNode: TreeNode,
   ) => {
-    if (treeNode.uri.split('/').includes('stashes')) {
-      openStashModul(treeNode.uri.replace(/^\/stashes\//, ''));
-      return;
-    }
     if (treeNode.type !== 'directory') {
+      if (treeNode.uri.split('/').includes('stashes')) {
+        openStashModul(treeNode.uri.replace(/^\/stashes\//, ''));
+        return;
+      }
       window.electron.ipcRenderer
         .invoke(
           'checkout-branch',
