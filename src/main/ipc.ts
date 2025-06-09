@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { dialog, ipcMain, IpcMainInvokeEvent } from 'electron';
 import path from 'path';
 
-let selectedRepoPath: string | null = '/home/leon/projects/OpenGit';
+let selectedRepoPath: string | null = '';
 
 async function initExeca() {
   return import('execa');
@@ -46,9 +46,11 @@ ipcMain.handle(
 );
 
 ipcMain.handle('fetch', async (_event: IpcMainInvokeEvent): Promise<void> => {
+  console.log('fetch called');
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
-  await execa('git', ['fetch'], { cwd: selectedRepoPath });
+  await execa('git', ['fetch', '-p'], { cwd: selectedRepoPath });
+  console.log('fetch finished');
 });
 
 ipcMain.handle('pull', async (_event: IpcMainInvokeEvent): Promise<void> => {
@@ -208,3 +210,7 @@ ipcMain.handle('list-staged', async () => {
   });
   return stdout.split('\n').filter(Boolean);
 });
+
+// Delete branch
+// local: git branch -D branch_name
+// remote: git push origin --delete branch_name
