@@ -4,6 +4,7 @@ import {
   GoArrowDown,
   GoArrowUp,
   GoArchive,
+  GoGitBranch,
 } from 'react-icons/go';
 import { LuGitBranchPlus } from 'react-icons/lu';
 import { CiFolderOn } from 'react-icons/ci';
@@ -25,11 +26,13 @@ export default function Utils() {
     setSelectedRepository,
     addRepository,
     setAction,
+    selectedRepository,
     repositories,
     action,
   } = useGit();
   const [unstagedFiles, setUnstagedFiles] = useState<File[]>([]);
   const [commitMessage, setCommitMessage] = useState<string>('');
+  const [newBranchName, setNewBranchName] = useState<string>('');
 
   const handleSelectFile = async () => {
     window.electron.ipcRenderer
@@ -147,8 +150,16 @@ export default function Utils() {
     setAction(GitAction.None);
   };
 
-  const handleAddBranch = async () => {
-    // await window.electron.ipcRenderer.invoke('add-branch');
+  const handleAddBranch = () => {
+    setAction(GitAction.AddBranch);
+  };
+
+  const addBranch = async () => {
+    if (newBranchName.length === 0) {
+      alert('Please enter a branch name');
+      return;
+    }
+    await window.electron.ipcRenderer.invoke('add-branch', newBranchName);
   };
 
   return (
@@ -202,6 +213,46 @@ export default function Utils() {
               <button type="button" onClick={handleStash}>
                 Stash
               </button>
+            </div>
+          )}
+          {action === GitAction.AddBranch && (
+            <div className="AddBranchModal">
+              <h1>Add Branch</h1>
+              <span>Created at: </span>
+              <span>
+                <GoGitBranch
+                  style={{ marginRight: '5px', marginLeft: '5px' }}
+                />
+                {selectedRepository.branch.replace('/branches/', '')}
+              </span>
+              <br />
+              <span>Branch name: </span>
+              <input
+                type="text"
+                onChange={(e) => {
+                  setNewBranchName(e.target.value);
+                }}
+                placeholder="Branch name"
+              />
+              <br />
+              <div className="AddBranchButtonContainer">
+                <button
+                  className="button"
+                  type="button"
+                  onClick={() => {
+                    addBranch();
+                  }}
+                >
+                  Add
+                </button>
+                <button
+                  className="button"
+                  type="button"
+                  onClick={() => setAction(GitAction.None)}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </Modal>
