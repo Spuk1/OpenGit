@@ -16,16 +16,17 @@ import { useGit } from '../../ContextManager/GitContext';
 const itemRenderer = (treeNode: TreeNode) => (
   <FileItemWithFileIcon treeNode={treeNode} />
 );
-
-function branchesToTree(local: string[], remote: string[]): TreeNode {
-  const createNode = (uri: string, isFile = false): TreeNode => {
-    return {
-      type: isFile ? 'file' : 'directory',
-      uri,
-      expanded: false,
-      children: [],
-    };
-  };
+function branchesToTree(
+  local: string[],
+  remote: string[],
+  stashes: string[],
+): TreeNode {
+  const createNode = (uri: string, isFile = false): TreeNode => ({
+    type: isFile ? 'file' : 'directory',
+    uri,
+    expanded: false,
+    children: [],
+  });
 
   const insertBranch = (
     root: TreeNode,
@@ -39,20 +40,17 @@ function branchesToTree(local: string[], remote: string[]): TreeNode {
     for (let i = 0; i < parts.length; i += 1) {
       const part = parts[i];
       currentUri += `/${part}`;
-      let existing = null;
-      if (current && current.children) {
+      let existing = current.children?.find(
         // eslint-disable-next-line no-loop-func
-        existing = current.children.find((child) => child.uri === currentUri);
-      }
+        (child) => child.uri === currentUri,
+      );
+
       if (!existing) {
         existing = createNode(currentUri, i === parts.length - 1);
         current.children?.push(existing);
       }
 
-      if (!existing.children) {
-        existing.children = [];
-      }
-
+      if (!existing.children) existing.children = [];
       current = existing;
     }
   };
@@ -71,6 +69,18 @@ function branchesToTree(local: string[], remote: string[]): TreeNode {
     children: [],
   };
 
+  const stashRoot: TreeNode = {
+    type: 'directory',
+    uri: '/stashes',
+    expanded: true,
+    children: stashes.map((stash) => ({
+      type: 'file',
+      uri: `/stashes/${stash}`,
+      expanded: false,
+      children: [],
+    })),
+  };
+
   local.forEach((branch) => insertBranch(localRoot, branch, '/branches'));
   remote.forEach((branch) => insertBranch(remoteRoot, branch, '/remote'));
 
@@ -78,7 +88,7 @@ function branchesToTree(local: string[], remote: string[]): TreeNode {
     type: 'directory',
     uri: '/',
     expanded: true,
-    children: [localRoot, remoteRoot],
+    children: [localRoot, remoteRoot, stashRoot],
   };
 }
 
@@ -88,20 +98,49 @@ export default function SourceTree() {
   const { selectedRepository, setSelectedBranch, selectedBranch, action } =
     useGit();
 
+  const openStashModul = (stash: string) => {
+    // eslint-disable-next-line no-alert, no-restricted-globals
+    if (confirm(`Do you want to use stash ${stash}?`)) {
+      const st: string = `stash@${stash.split(':')[0]}`;
+      window.electron.ipcRenderer
+        .invoke('use-stash', st)
+        .then((resp) => {
+          // eslint-disable-next-line no-use-before-define
+          refreshBranches();
+          return resp;
+        })
+        .catch((err) => {
+          // eslint-disable-next-line no-alert
+          alert(err);
+        });
+    }
+  };
+
   const refreshBranches = async () => {
     try {
       const { local, remote } =
         await window.electron.ipcRenderer.invoke('list-branches');
-      const treeData = branchesToTree(local, remote);
+      const stashes: string[] =
+        await window.electron.ipcRenderer.invoke('list-stashes');
+
+      const treeData = branchesToTree(
+        local,
+        remote,
+        stashes.filter((stash) => stash !== ''),
+      );
       setTree(treeData);
     } catch (err) {
-      console.error('Failed to load branches', err);
+      console.error('Failed to load branches or stashes', err);
     }
   };
 
   const toggleExpanded: FileTreeProps['onItemClick'] = async (
     treeNode: TreeNode,
   ) => {
+    if (treeNode.uri.split('/').includes('stashes')) {
+      openStashModul(treeNode.uri.replace(/^\/stashes\//, ''));
+      return;
+    }
     if (treeNode.type !== 'directory') {
       window.electron.ipcRenderer
         .invoke(
