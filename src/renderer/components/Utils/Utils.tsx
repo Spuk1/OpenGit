@@ -1,3 +1,4 @@
+/* eslint-disable no-alert */
 import {
   GoArrowDownLeft,
   GoArrowDown,
@@ -10,48 +11,93 @@ import IconButton from '../IconButton/IconButton';
 import './Utils.css';
 import VSpacer from '../VSpacer/VSpacer';
 import Header from '../Header/Header';
-import { useGit } from '../../ContextManager/GitContext';
+import { GitAction, useGit } from '../../ContextManager/GitContext';
 import Modal from '../Modal/Modal';
 
 export default function Utils() {
-  const { setSelectedRepository, addRepository } = useGit();
+  const { setSelectedRepository, addRepository, setAction, repositories } =
+    useGit();
+
   const handleSelectFile = async () => {
-    const filePaths =
-      await window.electron.ipcRenderer.invoke('open-file-dialog');
-    if (filePaths?.length) {
-      setSelectedRepository(filePaths[0]);
-      addRepository(filePaths[0]);
-    }
+    window.electron.ipcRenderer
+      .invoke('open-file-dialog')
+      .then((resp) => {
+        if (resp?.length) {
+          addRepository(resp[0]);
+          setSelectedRepository(repositories.length);
+        }
+        return null;
+      })
+      .catch(() => alert('Directory is not a valid git repository!'));
   };
 
   const handleFetch = async () => {
-    await window.electron.ipcRenderer.invoke('fetch');
+    setAction(GitAction.Fetch);
+    window.electron.ipcRenderer
+      .invoke('fetch')
+      .then(() => {
+        setAction(GitAction.None);
+        return null;
+      })
+      .catch((error) => {
+        alert(error);
+        setAction(GitAction.None);
+      });
   };
 
   const handlePull = async () => {
-    await window.electron.ipcRenderer.invoke('pull');
+    setAction(GitAction.Pull);
+    window.electron.ipcRenderer
+      .invoke('pull')
+      .then(() => {
+        setAction(GitAction.None);
+        return null;
+      })
+      .catch((error) => {
+        alert(error);
+        setAction(GitAction.None);
+      });
+    setAction(GitAction.None);
   };
 
   const handlePush = async () => {
-    await window.electron.ipcRenderer.invoke('push');
+    setAction(GitAction.Push);
+    window.electron.ipcRenderer
+      .invoke('push')
+      .then(() => {
+        setAction(GitAction.None);
+        return null;
+      })
+      .catch((error) => {
+        alert(error);
+        setAction(GitAction.None);
+      });
+    setAction(GitAction.None);
   };
 
   const handleStash = async () => {
-    await window.electron.ipcRenderer.invoke('stash');
+    setAction(GitAction.Stash);
+    window.electron.ipcRenderer
+      .invoke('stash')
+      .then(() => {
+        setAction(GitAction.None);
+        return null;
+      })
+      .catch((error) => {
+        alert(error);
+        setAction(GitAction.None);
+      });
+    setAction(GitAction.None);
   };
 
   const handleAddBranch = async () => {
-    await window.electron.ipcRenderer.invoke('add-branch');
+    // await window.electron.ipcRenderer.invoke('add-branch');
   };
 
   return (
     <div className="UtilsContainer">
-      <VSpacer size={2} />
-      <IconButton
-        title="Quick launch"
-        Icon={CiFolderOn}
-        onClick={handleSelectFile}
-      />
+      <VSpacer size={3} />
+      <IconButton title="Open" Icon={CiFolderOn} onClick={handleSelectFile} />
       <VSpacer size={10} />
       <IconButton title="Fetch" Icon={GoArrowDownLeft} onClick={handleFetch} />
       <VSpacer size={2} />
