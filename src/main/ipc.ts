@@ -46,11 +46,9 @@ ipcMain.handle(
 );
 
 ipcMain.handle('fetch', async (_event: IpcMainInvokeEvent): Promise<void> => {
-  console.log('fetch called');
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
   await execa('git', ['fetch', '-p'], { cwd: selectedRepoPath });
-  console.log('fetch finished');
 });
 
 ipcMain.handle('pull', async (_event: IpcMainInvokeEvent): Promise<void> => {
@@ -185,14 +183,12 @@ ipcMain.handle('list-changes', async () => {
 ipcMain.handle('stage-file', async (_event, file: string) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
-  console.log('Staging file:', file);
   await execa('git', ['add', file], { cwd: selectedRepoPath });
 });
 
 ipcMain.handle('unstage-file', async (_event, file: string) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
-  console.log('Unstaging file:', file);
   await execa('git', ['reset', 'HEAD', file], { cwd: selectedRepoPath });
 });
 
