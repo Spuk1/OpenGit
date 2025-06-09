@@ -5,7 +5,7 @@
   height: 6vh;
 }
 
-.alert {
-  width: 30vw;
-  height: 20vh
+.StashModal {
+  width: fit-content;
+  height: fit-content;
 }

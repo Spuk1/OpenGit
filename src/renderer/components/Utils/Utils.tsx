@@ -7,6 +7,7 @@ import {
 } from 'react-icons/go';
 import { LuGitBranchPlus } from 'react-icons/lu';
 import { CiFolderOn } from 'react-icons/ci';
+import { useState } from 'react';
 import IconButton from '../IconButton/IconButton';
 import './Utils.css';
 import VSpacer from '../VSpacer/VSpacer';
@@ -14,9 +15,21 @@ import Header from '../Header/Header';
 import { GitAction, useGit } from '../../ContextManager/GitContext';
 import Modal from '../Modal/Modal';
 
+type File = {
+  file: string;
+  checked: boolean;
+};
+
 export default function Utils() {
-  const { setSelectedRepository, addRepository, setAction, repositories } =
-    useGit();
+  const {
+    setSelectedRepository,
+    addRepository,
+    setAction,
+    repositories,
+    action,
+  } = useGit();
+  const [unstagedFiles, setUnstagedFiles] = useState<File[]>([]);
+  const [commitMessage, setCommitMessage] = useState<string>('');
 
   const handleSelectFile = async () => {
     window.electron.ipcRenderer
@@ -93,10 +106,30 @@ export default function Utils() {
     setAction(GitAction.None);
   };
 
-  const handleStash = async () => {
+  const prepareStash = async () => {
+    const unstaged = await window.electron.ipcRenderer.invoke('list-changes');
+    setUnstagedFiles(
+      unstaged.map((file: string) => {
+        return { file } as File;
+      }),
+    );
     setAction(GitAction.Stash);
+  };
+
+  const handleStash = async () => {
+    if (commitMessage.length === 0) {
+      alert('Please enter a commit message');
+      return;
+    }
+    const files = unstagedFiles
+      .filter((file) => file.checked)
+      .map((file) => file.file);
+    if (files.length === 0) {
+      alert('Please select files to stash');
+      return;
+    }
     window.electron.ipcRenderer
-      .invoke('stash')
+      .invoke('stash', commitMessage, files)
       .then(() => {
         setAction(GitAction.StashFinished);
         setTimeout(() => {
@@ -129,7 +162,7 @@ export default function Utils() {
       <VSpacer size={2} />
       <IconButton title="Push" Icon={GoArrowUp} onClick={handlePush} />
       <VSpacer size={8} />
-      <IconButton title="Stash" Icon={GoArchive} onClick={handleStash} />
+      <IconButton title="Stash" Icon={GoArchive} onClick={prepareStash} />
       <VSpacer size={15} />
       <Header />
       <VSpacer size={10} />
@@ -138,10 +171,39 @@ export default function Utils() {
         Icon={LuGitBranchPlus}
         onClick={handleAddBranch}
       />
-      {false && (
+      {action !== GitAction.None && (
         <Modal>
-          {/* TODO: fill with data depending on the action */}
-          <div className="alert" />
+          {action === GitAction.Stash && (
+            <div className="StashModal">
+              <h1>Stash</h1>
+              {unstagedFiles.map((file, i) => (
+                <div>
+                  <input
+                    type="checkbox"
+                    key={file.file}
+                    value={file.file}
+                    checked={file.checked}
+                    onChange={(e) => {
+                      const files = [...unstagedFiles];
+                      files[i].checked = e.target.checked;
+                      setUnstagedFiles(files);
+                    }}
+                  />
+                  <span>{file.file}</span>
+                </div>
+              ))}
+              <input
+                type="text"
+                placeholder="Stash message"
+                onChange={(e) => {
+                  setCommitMessage(e.target.value);
+                }}
+              />
+              <button type="button" onClick={handleStash}>
+                Stash
+              </button>
+            </div>
+          )}
         </Modal>
       )}
     </div>
