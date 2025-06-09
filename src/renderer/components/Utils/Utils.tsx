@@ -88,10 +88,10 @@ export default function Utils() {
     setAction(GitAction.None);
   };
 
-  const handlePush = async () => {
+  const handlePush = async (setUpstream = false) => {
     setAction(GitAction.Push);
     window.electron.ipcRenderer
-      .invoke('push')
+      .invoke('push', setUpstream)
       .then(() => {
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
@@ -99,7 +99,21 @@ export default function Utils() {
         }, 500);
         return null;
       })
-      .catch((error) => {
+      .catch((error: Error) => {
+        if (error.message.includes('--set-upstream')) {
+          if (
+            window.confirm(
+              'Do you want to set upstream? (git push --set-upstream origin <branch>)',
+            )
+          ) {
+            handlePush(true);
+          }
+          setAction(GitAction.PushFinshed);
+          setTimeout(() => {
+            setAction(GitAction.None);
+          }, 500);
+          return;
+        }
         alert(error);
         setAction(GitAction.PushFinshed);
         setTimeout(() => {

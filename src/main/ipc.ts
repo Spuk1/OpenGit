@@ -57,11 +57,26 @@ ipcMain.handle('pull', async (_event: IpcMainInvokeEvent): Promise<void> => {
   await execa('git', ['pull'], { cwd: selectedRepoPath });
 });
 
-ipcMain.handle('push', async (_event: IpcMainInvokeEvent): Promise<void> => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['push'], { cwd: selectedRepoPath });
-});
+ipcMain.handle(
+  'push',
+  async (_event: IpcMainInvokeEvent, setUpstream: boolean): Promise<void> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    if (setUpstream) {
+      const { stdout } = await execa('git', ['branch', '--show-current'], {
+        cwd: selectedRepoPath,
+      });
+      const branchName = stdout.trim();
+      await execa('git', ['push', '--set-upstream', 'origin', branchName], {
+        cwd: selectedRepoPath,
+      });
+      return;
+    }
+    await execa('git', ['push'], {
+      cwd: selectedRepoPath,
+    });
+  },
+);
 
 ipcMain.handle(
   'stash',
