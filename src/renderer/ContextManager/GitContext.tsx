@@ -18,6 +18,7 @@ export enum GitAction {
   FetchFinished = 'fetch finished',
   Stash = 'stashing',
   StashFinished = 'stash finished',
+  AddBranch = 'adding branch',
   None = 0,
 }
 
