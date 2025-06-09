@@ -85,7 +85,8 @@ function branchesToTree(local: string[], remote: string[]): TreeNode {
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
   const [tree, setTree] = useState<TreeNode | undefined>(undefined);
-  const { selectedRepository, setSelectedBranch, selectedBranch } = useGit();
+  const { selectedRepository, setSelectedBranch, selectedBranch, action } =
+    useGit();
 
   const refreshBranches = async () => {
     try {
@@ -126,11 +127,21 @@ export default function SourceTree() {
   };
 
   useEffect(() => {
+    const onFocus = () => {
+      refreshBranches();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
+  useEffect(() => {
     // without timeout local branches are requested to early
     setTimeout(() => {
       refreshBranches();
     }, 100);
-  }, [selectedRepository]);
+  }, [selectedRepository, action]);
 
   return (
     <div className="SourceTreeContainer">
