@@ -36,12 +36,18 @@ export default function Utils() {
     window.electron.ipcRenderer
       .invoke('fetch')
       .then(() => {
-        setAction(GitAction.None);
+        setAction(GitAction.FetchFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
         return null;
       })
       .catch((error) => {
         alert(error);
-        setAction(GitAction.None);
+        setAction(GitAction.FetchFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
       });
   };
 
@@ -50,12 +56,18 @@ export default function Utils() {
     window.electron.ipcRenderer
       .invoke('pull')
       .then(() => {
-        setAction(GitAction.None);
+        setAction(GitAction.PullFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
         return null;
       })
       .catch((error) => {
         alert(error);
-        setAction(GitAction.None);
+        setAction(GitAction.PullFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
       });
     setAction(GitAction.None);
   };
@@ -65,12 +77,18 @@ export default function Utils() {
     window.electron.ipcRenderer
       .invoke('push')
       .then(() => {
-        setAction(GitAction.None);
+        setAction(GitAction.PushFinshed);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
         return null;
       })
       .catch((error) => {
         alert(error);
-        setAction(GitAction.None);
+        setAction(GitAction.PushFinshed);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
       });
     setAction(GitAction.None);
   };
@@ -80,12 +98,18 @@ export default function Utils() {
     window.electron.ipcRenderer
       .invoke('stash')
       .then(() => {
-        setAction(GitAction.None);
+        setAction(GitAction.StashFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
         return null;
       })
       .catch((error) => {
         alert(error);
-        setAction(GitAction.None);
+        setAction(GitAction.StashFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
       });
     setAction(GitAction.None);
   };
