@@ -154,12 +154,22 @@ export default function Utils() {
     setAction(GitAction.AddBranch);
   };
 
-  const addBranch = async () => {
+  const addBranch = () => {
     if (newBranchName.length === 0) {
       alert('Please enter a branch name');
       return;
     }
-    await window.electron.ipcRenderer.invoke('add-branch', newBranchName);
+    window.electron.ipcRenderer
+      .invoke('add-branch', newBranchName)
+      .then(() => {
+        setAction(GitAction.None);
+        return null;
+      })
+      .catch((error) => {
+        alert(error);
+        setAction(GitAction.None);
+      });
+    setAction(GitAction.None);
   };
 
   return (
@@ -210,8 +220,15 @@ export default function Utils() {
                   setCommitMessage(e.target.value);
                 }}
               />
-              <button type="button" onClick={handleStash}>
+              <button type="button" className="button" onClick={handleStash}>
                 Stash
+              </button>
+              <button
+                className="button"
+                type="button"
+                onClick={() => setAction(GitAction.None)}
+              >
+                Cancel
               </button>
             </div>
           )}
