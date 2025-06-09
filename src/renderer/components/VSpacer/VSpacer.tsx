@@ -3,5 +3,5 @@ type Props = {
 };
 
 export default function VSpacer({ size }: Props) {
-  return <div style={{ width: `${size * 0.2}rem` }} />;
+  return <div style={{ width: `${size * 0.5}vw` }} />;
 }

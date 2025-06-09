@@ -66,7 +66,9 @@ export default function CommitPanel() {
   }, []);
 
   useEffect(() => {
-    loadChanges();
+    setTimeout(() => {
+      loadChanges();
+    }, 100);
   }, [selectedBranch, selectedRepository]);
 
   return (

@@ -5,7 +5,19 @@
   height: 6vh;
 }
 
-.alert {
-  width: 30vw;
-  height: 20vh
+.StashModal {
+  width: fit-content;
+  height: fit-content;
+}
+
+.button {
+  padding: 2px 5px;
+  margin: 5px;
+  font-size: 0.9rem;
+}
+
+.AddBranchButtonContainer {
+  display: flex;
+  margin-top: 10px;
+  justify-content: flex-end;
 }

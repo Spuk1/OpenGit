@@ -1,8 +1,7 @@
-import { ReactElement } from 'react';
 import './Modal.css';
 
 type Props = {
-  children: ReactElement[] | ReactElement;
+  children: any;
 };
 
 export default function Modal({ children }: Props) {

@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { dialog, ipcMain, IpcMainInvokeEvent } from 'electron';
 import path from 'path';
 
-let selectedRepoPath: string | null = '/home/leon/projects/OpenGit';
+let selectedRepoPath: string | null = '';
 
 async function initExeca() {
   return import('execa');
@@ -48,7 +48,7 @@ ipcMain.handle(
 ipcMain.handle('fetch', async (_event: IpcMainInvokeEvent): Promise<void> => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
-  await execa('git', ['fetch'], { cwd: selectedRepoPath });
+  await execa('git', ['fetch', '-p'], { cwd: selectedRepoPath });
 });
 
 ipcMain.handle('pull', async (_event: IpcMainInvokeEvent): Promise<void> => {
@@ -57,17 +57,70 @@ ipcMain.handle('pull', async (_event: IpcMainInvokeEvent): Promise<void> => {
   await execa('git', ['pull'], { cwd: selectedRepoPath });
 });
 
-ipcMain.handle('push', async (_event: IpcMainInvokeEvent): Promise<void> => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['push'], { cwd: selectedRepoPath });
-});
+ipcMain.handle(
+  'push',
+  async (_event: IpcMainInvokeEvent, setUpstream: boolean): Promise<void> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    if (setUpstream) {
+      const { stdout } = await execa('git', ['branch', '--show-current'], {
+        cwd: selectedRepoPath,
+      });
+      const branchName = stdout.trim();
+      await execa('git', ['push', '--set-upstream', 'origin', branchName], {
+        cwd: selectedRepoPath,
+      });
+      return;
+    }
+    await execa('git', ['push'], {
+      cwd: selectedRepoPath,
+    });
+  },
+);
 
-ipcMain.handle('stash', async (_event: IpcMainInvokeEvent): Promise<void> => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['stash'], { cwd: selectedRepoPath });
-});
+ipcMain.handle(
+  'stash',
+  async (
+    _event: IpcMainInvokeEvent,
+    name: string,
+    files: string[],
+  ): Promise<void> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    let string = '';
+    for (let i = 0; i < files.length; i += 1) {
+      string += `${files[i]}${i === files.length - 1 ? '' : ' '}`;
+    }
+    await execa('git', ['add', string], { cwd: selectedRepoPath });
+    await execa('git', ['stash', 'push', '-m', name, string], {
+      cwd: selectedRepoPath,
+    });
+  },
+);
+
+ipcMain.handle(
+  'list-stashes',
+  async (_event: IpcMainInvokeEvent): Promise<any> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    const { stdout } = await execa('git', ['stash', 'list'], {
+      cwd: selectedRepoPath,
+    });
+    return stdout.split('stash@');
+  },
+);
+
+ipcMain.handle(
+  'use-stash',
+  async (_event: IpcMainInvokeEvent, stash: string): Promise<any> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    const { stdout } = await execa('git', ['stash', 'pop', stash], {
+      cwd: selectedRepoPath,
+    });
+    return stdout;
+  },
+);
 
 ipcMain.handle('checkout', async (_event: IpcMainInvokeEvent): Promise<any> => {
   if (!selectedRepoPath) throw new Error('No repository selected');
@@ -183,14 +236,12 @@ ipcMain.handle('list-changes', async () => {
 ipcMain.handle('stage-file', async (_event, file: string) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
-  console.log('Staging file:', file);
   await execa('git', ['add', file], { cwd: selectedRepoPath });
 });
 
 ipcMain.handle('unstage-file', async (_event, file: string) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
-  console.log('Unstaging file:', file);
   await execa('git', ['reset', 'HEAD', file], { cwd: selectedRepoPath });
 });
 
@@ -208,3 +259,7 @@ ipcMain.handle('list-staged', async () => {
   });
   return stdout.split('\n').filter(Boolean);
 });
+
+// Delete branch
+// local: git branch -D branch_name
+// remote: git push origin --delete branch_name

@@ -7,26 +7,49 @@ import {
   useEffect,
 } from 'react';
 
+export enum GitAction {
+  Commit = 'comitting',
+  CommitFinished = 'comit finsihed',
+  Push = 'pushing',
+  PushFinshed = 'push finished',
+  Pull = 'pulling',
+  PullFinished = 'pull finished',
+  Fetch = 'fetching',
+  FetchFinished = 'fetch finished',
+  Stash = 'stashing',
+  StashFinished = 'stash finished',
+  AddBranch = 'adding branch',
+  None = 0,
+}
+
+export type Repository = {
+  name: string;
+  path: string;
+  branch: string;
+};
+
 type GitContextType = {
-  selectedRepository: string;
-  setSelectedRepository: (branch: string) => void;
-  repositories: string[];
+  selectedRepository: Repository;
+  setSelectedRepository: (repository: number) => void;
+  repositories: Repository[];
   addRepository: (branch: string) => void;
   selectedBranch: string;
   setSelectedBranch: (branch: string) => void;
+  action: GitAction | null;
+  setAction: (action: GitAction) => void;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
 
 export function GitProvider({ children }: { children: ReactNode }) {
-  const [selectedRepository, setSelectedRepository] = useState('');
-  const [repositories, setRepositories] = useState<string[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedRepository, setSelectedRepository] = useState<number>(0);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [action, setAction] = useState<GitAction>(GitAction.None);
 
   function getSelectedRepository() {
     const repository = localStorage.getItem('selectedRepository');
     if (repository) {
-      setSelectedRepository(repository);
+      setSelectedRepository(Number(repository));
     }
     const repos = localStorage.getItem('repositories');
     if (repos) {
@@ -42,33 +65,68 @@ export function GitProvider({ children }: { children: ReactNode }) {
     async function syncRepository() {
       await window.electron.ipcRenderer.invoke(
         'set-selected-repository',
-        selectedRepository,
+        repositories.length ? repositories[selectedRepository].path : '',
       );
     }
     syncRepository();
-    localStorage.setItem('selectedRepository', selectedRepository);
-  }, [selectedRepository]);
+    localStorage.setItem(
+      'selectedRepository',
+      JSON.stringify(selectedRepository),
+    );
+  }, [repositories, selectedRepository]);
 
   function addRepository(repo: string) {
-    if (repositories.includes(repo)) return;
-    const newRepos = [...repositories, repo];
+    if (
+      repositories.findIndex((repository: Repository) => {
+        return repository.path === repo;
+      }) >= 0
+    ) {
+      return;
+    }
+    const split = repo.split('/');
+    const newRepos = [
+      ...repositories,
+      {
+        path: repo,
+        name: split[split.length - 1],
+        branch: '/branches/main',
+      } as Repository,
+    ];
     setRepositories(newRepos);
     localStorage.setItem('repositories', JSON.stringify(newRepos));
   }
 
-  useEffect(() => {
-    localStorage.setItem('selectedBranch', selectedBranch);
-  }, [selectedBranch]);
+  function getSelectedRepositoryFromIndex(): Repository {
+    if (repositories.length === 0) {
+      return {
+        name: '',
+        path: '',
+        branch: '',
+      };
+    }
+    return repositories[selectedRepository];
+  }
+
+  function setSelectedBranch(branch: string) {
+    const newRepos = [...repositories];
+    newRepos[selectedRepository].branch = branch;
+    setRepositories(newRepos);
+    localStorage.setItem('repositories', JSON.stringify(newRepos));
+  }
 
   return (
     <GitContext.Provider
       value={{
-        selectedRepository,
+        selectedRepository: getSelectedRepositoryFromIndex(),
         setSelectedRepository,
         repositories,
         addRepository,
-        selectedBranch,
+        selectedBranch: getSelectedRepositoryFromIndex().branch
+          ? getSelectedRepositoryFromIndex().branch
+          : '',
         setSelectedBranch,
+        action,
+        setAction,
       }}
     >
       {children}
