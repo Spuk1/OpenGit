@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './SourceTree.css';
 import { GoLog, GoQuote } from 'react-icons/go';
 import {
@@ -12,6 +12,7 @@ import FileItemWithFileIcon from '@sinm/react-file-tree/lib/FileItemWithFileIcon
 import '@sinm/react-file-tree/icons.css';
 import Divider from '../Divider/Divider';
 import { useGit } from '../../ContextManager/GitContext';
+import ContextMenu from '../ContextMenu/ContextMenu';
 
 const itemRenderer = (treeNode: TreeNode) => (
   <FileItemWithFileIcon treeNode={treeNode} />
@@ -97,6 +98,12 @@ export default function SourceTree() {
   const [tree, setTree] = useState<TreeNode | undefined>(undefined);
   const { selectedRepository, setSelectedBranch, selectedBranch, action } =
     useGit();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    uri: string;
+  } | null>(null);
 
   const openStashModul = (stash: string) => {
     // eslint-disable-next-line no-alert, no-restricted-globals
@@ -169,9 +176,28 @@ export default function SourceTree() {
     const onFocus = () => {
       refreshBranches();
     };
+    const container = containerRef.current;
+    const handleContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const treeItem = target.closest('.file-tree__tree-item') as HTMLElement;
+      if (!treeItem) return;
+
+      const uri = treeItem.getAttribute('title');
+      if (
+        !uri ||
+        (!uri.startsWith('/branches/') && !uri.startsWith('/remote/'))
+      )
+        return;
+
+      e.preventDefault();
+      setContextMenu({ x: e.pageX, y: e.pageY, uri });
+    };
+
+    container?.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('focus', onFocus);
     return () => {
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('contextmenu', handleContextMenu);
     };
   }, []);
 
@@ -183,7 +209,7 @@ export default function SourceTree() {
   }, [selectedRepository, action]);
 
   return (
-    <div className="SourceTreeContainer">
+    <div className="SourceTreeContainer" ref={containerRef}>
       <div className="ChangesContainer">
         <div
           className="Changes"
@@ -221,6 +247,14 @@ export default function SourceTree() {
         draggable
       />
       <Divider />
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          uri={contextMenu.uri}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
