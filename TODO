@@ -1,0 +1,9 @@
+- remember collapsed tree nodes
+- implement discard changes
+- display changes number
+- implement all-commits panel
+- implement right-click menu on branch-tree with (delete, push etc..)
+- remove insta staging of files and display changes within files
+- allow staging of specific lines within files
+- cloning of repositories
+- workspaces
