@@ -319,6 +319,9 @@ export default function SourceTree() {
             <GoLog />
           </span>
           <span>Changes</span>
+          {unstaged.length > 0 && (
+            <span style={{ marginLeft: '5px' }}>{`(${unstaged.length})`}</span>
+          )}
         </div>
         <div
           className="Changes"
