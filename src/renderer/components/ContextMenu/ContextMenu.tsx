@@ -26,7 +26,7 @@ export default function ContextMenu({
 
   const handleAction = (action: string) => {
     console.log(`${action} on ${uri}`);
-    // Here you'd call ipcRenderer or your internal API
+    // action
     onClose();
   };
 
