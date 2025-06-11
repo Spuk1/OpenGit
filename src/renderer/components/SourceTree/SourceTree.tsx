@@ -218,20 +218,6 @@ export default function SourceTree() {
         openStashModal(treeNode.uri.replace(/^\/stashes\//, ''));
         return;
       }
-      window.electron.ipcRenderer
-        .invoke(
-          'checkout-branch',
-          treeNode.uri.replace(/^\/branches\//, '').replace(/^\/remote\//, ''),
-        )
-        .then((resp) => {
-          setSelectedBranch(treeNode.uri);
-          return resp;
-        })
-        .catch((err) => {
-          // eslint-disable-next-line no-alert
-          alert(err);
-        });
-      await refreshBranches();
       return;
     }
     setTree(
@@ -246,7 +232,9 @@ export default function SourceTree() {
     const onFocus = () => {
       refreshBranches();
     };
+
     const container = containerRef.current;
+
     const handleContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const treeItem = target.closest('.file-tree__tree-item') as HTMLElement;
@@ -263,11 +251,44 @@ export default function SourceTree() {
       setContextMenu({ x: e.pageX, y: e.pageY, uri });
     };
 
+    const handleDoubleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const treeItem = target.closest('.file-tree__tree-item') as HTMLElement;
+      if (!treeItem) return;
+
+      const uri = treeItem.getAttribute('title');
+      if (
+        !uri ||
+        (!uri.startsWith('/branches/') && !uri.startsWith('/remote/'))
+      )
+        return;
+
+      e.preventDefault();
+
+      // Call the branch checkout and set selected branch
+      window.electron.ipcRenderer
+        .invoke(
+          'checkout-branch',
+          uri.replace(/^\/branches\//, '').replace(/^\/remote\//, ''),
+        )
+        .then(() => {
+          setSelectedBranch(uri);
+          refreshBranches();
+          return null;
+        })
+        .catch((err) => {
+          alert(err);
+        });
+    };
+
     container?.addEventListener('contextmenu', handleContextMenu);
+    container?.addEventListener('dblclick', handleDoubleClick);
     window.addEventListener('focus', onFocus);
+
     return () => {
+      container?.removeEventListener('contextmenu', handleContextMenu);
+      container?.removeEventListener('dblclick', handleDoubleClick);
       window.removeEventListener('focus', onFocus);
-      window.removeEventListener('contextmenu', handleContextMenu);
     };
   }, []);
 

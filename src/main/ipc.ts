@@ -301,6 +301,21 @@ ipcMain.handle('get-branch-revs', async (_event, branch: string) => {
   }
 });
 
-// Delete branch
+ipcMain.handle(
+  'delete-branch',
+  async (_event, branch: string, remote: boolean) => {
+    console.log('deleting branch');
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    if (remote) {
+      await execa('git', ['push', 'origin', '--delete', branch], {
+        cwd: selectedRepoPath,
+      });
+      return;
+    }
+    await execa('git', ['branch', '-D', branch], { cwd: selectedRepoPath });
+  },
+);
+
 // local: git branch -D branch_name
 // remote: git push origin --delete branch_name
