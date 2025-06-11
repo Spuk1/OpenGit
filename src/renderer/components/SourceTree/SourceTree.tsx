@@ -38,7 +38,6 @@ export default function SourceTree() {
   } | null>(null);
 
   const renderItem = (node: TreeNodeGit): ReactElement => {
-    console.log(node.ahead, node.behind);
     const label = node.uri.split('/').pop() || '';
     const Icon: IconType = node.uri.includes(selectedBranch)
       ? GoCheck
@@ -82,8 +81,8 @@ export default function SourceTree() {
       uri,
       expanded: selectedBranch.includes(uri), // still fine
       children: [],
-      ahead,
-      behind,
+      ahead: isFile ? ahead : 0,
+      behind: isFile ? behind : 0,
     });
 
     const insertBranch = async (
@@ -91,18 +90,13 @@ export default function SourceTree() {
       branchPath: string,
       basePath: string,
     ) => {
-      let refs: string;
-      try {
-        refs = await window.electron.ipcRenderer.invoke(
-          'get-branch-revs',
-          branchPath,
-        );
-      } catch (err) {
-        console.error('Failed to get branch refs', err);
-        refs = '0\t0'; // fallback
-      }
-
-      const [ahead, behind] = refs.split('\t').map(Number);
+      const refs: string = basePath.includes('branches')
+        ? await window.electron.ipcRenderer.invoke(
+            'get-branch-revs',
+            branchPath,
+          )
+        : '0\t0';
+      const [behind, ahead] = refs.split('\t').map(Number);
       const parts = branchPath.split('/');
       let current = root;
       let currentUri = basePath;
