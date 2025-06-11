@@ -226,7 +226,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
   };
 
   function handleDeleteBranch(branch: string, remote: boolean = false) {
-    if (!window.confirm(`Are you sure you want to delete '${branch}'?`)) {
+    if (window.confirm(`Are you sure you want to delete '${branch}'?`)) {
       window.electron.ipcRenderer
         .invoke('delete-branch', branch, remote)
         .then(() => {
