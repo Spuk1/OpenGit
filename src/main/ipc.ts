@@ -9,7 +9,33 @@ async function initExeca() {
   return import('execa');
 }
 
-initExeca();
+export default async function initSSHAgent() {
+  const { execa } = await initExeca();
+  const { stdout } = await execa('eval $(ssh-agent)');
+  return stdout;
+}
+
+ipcMain.handle(
+  'add-ssh-keys',
+  async (_event: IpcMainInvokeEvent, keys: string[]): Promise<any> => {
+    const { execa } = await initExeca();
+    keys.forEach((key) => {
+      execa('ssh-add', [key]);
+    });
+  },
+);
+
+ipcMain.handle(
+  'get-branch',
+  async (_event: IpcMainInvokeEvent): Promise<string> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    const { stdout } = await execa('git', ['branch', '--show-current'], {
+      cwd: selectedRepoPath,
+    });
+    return stdout.trim();
+  },
+);
 
 ipcMain.handle(
   'open-file-dialog',
@@ -251,13 +277,28 @@ ipcMain.handle('commit', async (_event, message: string) => {
   await execa('git', ['commit', '-m', message], { cwd: selectedRepoPath });
 });
 
-ipcMain.handle('list-staged', async () => {
+ipcMain.handle('list-staged', async (_event) => {
   if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
   const { stdout } = await execa('git', ['diff', '--cached', '--name-only'], {
     cwd: selectedRepoPath,
   });
   return stdout.split('\n').filter(Boolean);
+});
+
+ipcMain.handle('get-branch-revs', async (_event, branch: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  try {
+    const { stdout } = await execa(
+      'git',
+      ['rev-list', '--left-right', '--count', `origin/${branch}...${branch}`],
+      { cwd: selectedRepoPath },
+    );
+    return stdout;
+  } catch {
+    return '0 \t0';
+  }
 });
 
 // Delete branch

@@ -1,6 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+/* eslint-disable react-hooks/exhaustive-deps */
+import { ReactElement, useEffect, useRef, useState } from 'react';
 import './SourceTree.css';
-import { GoLog, GoQuote } from 'react-icons/go';
+import {
+  GoLog,
+  GoQuote,
+  GoArrowUp,
+  GoFileDirectory,
+  GoGitBranch,
+  GoCheck,
+  GoArrowDown,
+} from 'react-icons/go';
 import {
   FileTree,
   FileTreeProps,
@@ -8,94 +17,17 @@ import {
   utils,
 } from '@sinm/react-file-tree';
 import '@sinm/react-file-tree/styles.css';
-import FileItemWithFileIcon from '@sinm/react-file-tree/lib/FileItemWithFileIcon';
 import '@sinm/react-file-tree/icons.css';
+import { IconType } from 'react-icons';
 import Divider from '../Divider/Divider';
 import { useGit } from '../../ContextManager/GitContext';
 import ContextMenu from '../ContextMenu/ContextMenu';
 
-const itemRenderer = (treeNode: TreeNode) => (
-  <FileItemWithFileIcon treeNode={treeNode} />
-);
-function branchesToTree(
-  local: string[],
-  remote: string[],
-  stashes: string[],
-): TreeNode {
-  const createNode = (uri: string, isFile = false): TreeNode => ({
-    type: isFile ? 'file' : 'directory',
-    uri,
-    expanded: false,
-    children: [],
-  });
-
-  const insertBranch = (
-    root: TreeNode,
-    branchPath: string,
-    basePath: string,
-  ) => {
-    const parts = branchPath.split('/');
-    let current = root;
-    let currentUri = basePath;
-
-    for (let i = 0; i < parts.length; i += 1) {
-      const part = parts[i];
-      currentUri += `/${part}`;
-      let existing = current.children?.find(
-        // eslint-disable-next-line no-loop-func
-        (child) => child.uri === currentUri,
-      );
-
-      if (!existing) {
-        existing = createNode(currentUri, i === parts.length - 1);
-        current.children?.push(existing);
-      }
-
-      if (!existing.children) existing.children = [];
-      current = existing;
-    }
-  };
-
-  const localRoot: TreeNode = {
-    type: 'directory',
-    uri: '/branches',
-    expanded: true,
-    children: [],
-  };
-
-  const remoteRoot: TreeNode = {
-    type: 'directory',
-    uri: '/remote',
-    expanded: true,
-    children: [],
-  };
-
-  const stashRoot: TreeNode = {
-    type: 'directory',
-    uri: '/stashes',
-    expanded: true,
-    children: stashes.map((stash) => ({
-      type: 'file',
-      uri: `/stashes/${stash}`,
-      expanded: false,
-      children: [],
-    })),
-  };
-
-  local.forEach((branch) => insertBranch(localRoot, branch, '/branches'));
-  remote.forEach((branch) => insertBranch(remoteRoot, branch, '/remote'));
-
-  return {
-    type: 'directory',
-    uri: '/',
-    expanded: true,
-    children: [localRoot, remoteRoot, stashRoot],
-  };
-}
+type TreeNodeGit = TreeNode<{ behind: number; ahead: number }>;
 
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
-  const [tree, setTree] = useState<TreeNode | undefined>(undefined);
+  const [tree, setTree] = useState<TreeNodeGit | undefined>(undefined);
   const { selectedRepository, setSelectedBranch, selectedBranch, action } =
     useGit();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -105,23 +37,142 @@ export default function SourceTree() {
     uri: string;
   } | null>(null);
 
-  const openStashModul = (stash: string) => {
-    // eslint-disable-next-line no-alert, no-restricted-globals
-    if (confirm(`Do you want to use stash ${stash}?`)) {
-      const st: string = `stash@${stash.split(':')[0]}`;
-      window.electron.ipcRenderer
-        .invoke('use-stash', st)
-        .then((resp) => {
-          // eslint-disable-next-line no-use-before-define
-          refreshBranches();
-          return resp;
-        })
-        .catch((err) => {
-          // eslint-disable-next-line no-alert
-          alert(err);
-        });
-    }
+  const renderItem = (node: TreeNodeGit): ReactElement => {
+    const label = node.uri.split('/').pop() || '';
+    const Icon: IconType = node.uri.includes(selectedBranch)
+      ? GoCheck
+      : GoGitBranch;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {node.type === 'directory' ? <GoFileDirectory /> : <Icon />}
+        <span>{label}</span>
+        {node.behind > 0 && (
+          <span>
+            <span>
+              <GoArrowDown />
+            </span>
+            <span>{node.behind}</span>
+          </span>
+        )}
+        {node.ahead > 0 && (
+          <span>
+            <span>
+              <GoArrowUp />
+            </span>
+            <span>{node.ahead}</span>
+          </span>
+        )}
+      </div>
+    );
   };
+
+  async function branchesToTree(
+    local: string[],
+    remote: string[],
+    stashes: string[],
+  ): Promise<TreeNodeGit> {
+    const createNode = (
+      uri: string,
+      ahead: number,
+      behind: number,
+      isFile = false,
+    ): TreeNodeGit => ({
+      type: isFile ? 'file' : 'directory',
+      uri,
+      expanded: selectedBranch.includes(uri), // still fine
+      children: [],
+      ahead: isFile ? ahead : 0,
+      behind: isFile ? behind : 0,
+    });
+
+    const insertBranch = async (
+      root: TreeNodeGit,
+      branchPath: string,
+      basePath: string,
+    ) => {
+      const refs: string = basePath.includes('branches')
+        ? await window.electron.ipcRenderer.invoke(
+            'get-branch-revs',
+            branchPath,
+          )
+        : '0\t0';
+      const [behind, ahead] = refs.split('\t').map(Number);
+      const parts = branchPath.split('/');
+      let current = root;
+      let currentUri = basePath;
+
+      for (let i = 0; i < parts.length; i += 1) {
+        const part = parts[i];
+        currentUri += `/${part}`;
+        let existing = current.children?.find(
+          // eslint-disable-next-line no-loop-func
+          (child) => child.uri === currentUri,
+        );
+
+        if (!existing) {
+          existing = createNode(
+            currentUri,
+            ahead,
+            behind,
+            i === parts.length - 1,
+          );
+          current.children?.push(existing);
+        }
+
+        if (!existing.children) existing.children = [];
+        current = existing;
+      }
+    };
+
+    const localRoot: TreeNodeGit = {
+      type: 'directory',
+      uri: '/branches',
+      children: [],
+      behind: 0,
+      ahead: 0,
+      expanded: true,
+    };
+
+    const remoteRoot: TreeNodeGit = {
+      type: 'directory',
+      uri: '/remote',
+      children: [],
+      behind: 0,
+      ahead: 0,
+      expanded: true,
+    };
+
+    const stashRoot: TreeNodeGit = {
+      type: 'directory',
+      uri: '/stashes',
+      behind: 0,
+      ahead: 0,
+      expanded: true,
+      children: stashes.map((stash) => ({
+        type: 'file',
+        uri: `/stashes/${stash}`,
+        expanded: false,
+        behind: 0,
+        ahead: 0,
+        children: [],
+      })),
+    };
+
+    // await all insertions
+    await Promise.all([
+      ...local.map((branch) => insertBranch(localRoot, branch, '/branches')),
+      ...remote.map((branch) => insertBranch(remoteRoot, branch, '/remote')),
+    ]);
+
+    return {
+      type: 'directory',
+      uri: '/',
+      expanded: true,
+      behind: 0,
+      ahead: 0,
+      children: [localRoot, remoteRoot, stashRoot],
+    };
+  }
 
   const refreshBranches = async () => {
     try {
@@ -130,7 +181,7 @@ export default function SourceTree() {
       const stashes: string[] =
         await window.electron.ipcRenderer.invoke('list-stashes');
 
-      const treeData = branchesToTree(
+      const treeData = await branchesToTree(
         local,
         remote,
         stashes.filter((stash) => stash !== ''),
@@ -141,12 +192,30 @@ export default function SourceTree() {
     }
   };
 
+  const openStashModal = (stash: string) => {
+    // eslint-disable-next-line no-alert, no-restricted-globals
+    if (confirm(`Do you want to use stash ${stash}?`)) {
+      const st: string = `stash@${stash.split(':')[0]}`;
+      window.electron.ipcRenderer
+        .invoke('use-stash', st)
+        .then((resp) => {
+          refreshBranches();
+          return resp;
+        })
+        .catch((err) => {
+          // eslint-disable-next-line no-alert
+          alert(err);
+        });
+    }
+  };
+
   const toggleExpanded: FileTreeProps['onItemClick'] = async (
-    treeNode: TreeNode,
+    node: TreeNode,
   ) => {
+    const treeNode = node as TreeNodeGit;
     if (treeNode.type !== 'directory') {
       if (treeNode.uri.split('/').includes('stashes')) {
-        openStashModul(treeNode.uri.replace(/^\/stashes\//, ''));
+        openStashModal(treeNode.uri.replace(/^\/stashes\//, ''));
         return;
       }
       window.electron.ipcRenderer
@@ -165,10 +234,11 @@ export default function SourceTree() {
       await refreshBranches();
       return;
     }
-    setTree((_tree) =>
-      utils.assignTreeNode(_tree, treeNode.uri, {
-        expanded: !treeNode.expanded,
-      }),
+    setTree(
+      (_tree) =>
+        utils.assignTreeNode(_tree, treeNode.uri, {
+          expanded: !treeNode.expanded,
+        }) as TreeNodeGit,
     );
   };
 
@@ -242,7 +312,9 @@ export default function SourceTree() {
       <FileTree
         tree={tree}
         onItemClick={toggleExpanded}
-        itemRenderer={itemRenderer}
+        itemRenderer={(node) => {
+          return renderItem(node as TreeNodeGit);
+        }}
         activatedUri={selectedBranch}
         draggable
       />

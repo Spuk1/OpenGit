@@ -2,13 +2,15 @@
 .Modal {
   background: #33373d;
   color: rgb(255, 255, 255);
-  padding: 1em;
+  padding: 1.5em;
+  padding-right: 0.5rem;
   position: absolute;
   left: 50%;
   transform: translate(-50%, 50%);
   z-index: 99;
-  border-radius: 2em;
+  border-radius: 1em;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.24);
   width: fit-content;
   height: fit-content;
+  max-height: 50vh;
 }

@@ -20,7 +20,9 @@ export type Channels =
   | 'commit'
   | 'list-staged'
   | 'list-stashes'
-  | 'use-stash';
+  | 'use-stash'
+  | 'get-branch'
+  | 'get-branch-revs';
 
 const electronHandler = {
   ipcRenderer: {

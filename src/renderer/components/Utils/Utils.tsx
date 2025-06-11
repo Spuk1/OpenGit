@@ -23,115 +23,18 @@ type File = {
 
 export default function Utils() {
   const {
-    setSelectedRepository,
-    addRepository,
     setAction,
     selectedRepository,
-    repositories,
     action,
+    handleSelectFile,
+    handleFetch,
+    handlePull,
+    handlePush,
+    prepareStash,
   } = useGit();
   const [unstagedFiles, setUnstagedFiles] = useState<File[]>([]);
   const [commitMessage, setCommitMessage] = useState<string>('');
   const [newBranchName, setNewBranchName] = useState<string>('');
-
-  const handleSelectFile = async () => {
-    window.electron.ipcRenderer
-      .invoke('open-file-dialog')
-      .then((resp) => {
-        if (resp?.length) {
-          addRepository(resp[0]);
-          setSelectedRepository(repositories.length);
-        }
-        return null;
-      })
-      .catch(() => alert('Directory is not a valid git repository!'));
-  };
-
-  const handleFetch = async () => {
-    setAction(GitAction.Fetch);
-    window.electron.ipcRenderer
-      .invoke('fetch')
-      .then(() => {
-        setAction(GitAction.FetchFinished);
-        setTimeout(() => {
-          setAction(GitAction.None);
-        }, 500);
-        return null;
-      })
-      .catch((error) => {
-        alert(error);
-        setAction(GitAction.FetchFinished);
-        setTimeout(() => {
-          setAction(GitAction.None);
-        }, 500);
-      });
-  };
-
-  const handlePull = async () => {
-    setAction(GitAction.Pull);
-    window.electron.ipcRenderer
-      .invoke('pull')
-      .then(() => {
-        setAction(GitAction.PullFinished);
-        setTimeout(() => {
-          setAction(GitAction.None);
-        }, 500);
-        return null;
-      })
-      .catch((error) => {
-        alert(error);
-        setAction(GitAction.PullFinished);
-        setTimeout(() => {
-          setAction(GitAction.None);
-        }, 500);
-      });
-    setAction(GitAction.None);
-  };
-
-  const handlePush = async (setUpstream = false) => {
-    setAction(GitAction.Push);
-    window.electron.ipcRenderer
-      .invoke('push', setUpstream)
-      .then(() => {
-        setAction(GitAction.PushFinshed);
-        setTimeout(() => {
-          setAction(GitAction.None);
-        }, 500);
-        return null;
-      })
-      .catch((error: Error) => {
-        if (error.message.includes('--set-upstream')) {
-          if (
-            window.confirm(
-              'Do you want to set upstream? (git push --set-upstream origin <branch>)',
-            )
-          ) {
-            handlePush(true);
-          }
-          setAction(GitAction.PushFinshed);
-          setTimeout(() => {
-            setAction(GitAction.None);
-          }, 500);
-          return;
-        }
-        alert(error);
-        setAction(GitAction.PushFinshed);
-        setTimeout(() => {
-          setAction(GitAction.None);
-        }, 500);
-      });
-    setAction(GitAction.None);
-  };
-
-  const prepareStash = async () => {
-    const unstaged = await window.electron.ipcRenderer.invoke('list-changes');
-    setUnstagedFiles(
-      unstaged.map((file: string) => {
-        return { file } as File;
-      }),
-    );
-    setAction(GitAction.Stash);
-  };
 
   const handleStash = async () => {
     if (commitMessage.length === 0) {
@@ -197,7 +100,11 @@ export default function Utils() {
       <VSpacer size={2} />
       <IconButton title="Push" Icon={GoArrowUp} onClick={handlePush} />
       <VSpacer size={8} />
-      <IconButton title="Stash" Icon={GoArchive} onClick={prepareStash} />
+      <IconButton
+        title="Stash"
+        Icon={GoArchive}
+        onClick={() => prepareStash(setUnstagedFiles)}
+      />
       <VSpacer size={15} />
       <Header />
       <VSpacer size={10} />
@@ -210,7 +117,7 @@ export default function Utils() {
         <Modal>
           {action === GitAction.Stash && (
             <div className="StashModal">
-              <h1>Stash</h1>
+              <h2>Stash</h2>
               {unstagedFiles.map((file, i) => (
                 <div>
                   <input
@@ -228,6 +135,7 @@ export default function Utils() {
                 </div>
               ))}
               <input
+                style={{ marginTop: '10px' }}
                 type="text"
                 placeholder="Stash message"
                 onChange={(e) => {
