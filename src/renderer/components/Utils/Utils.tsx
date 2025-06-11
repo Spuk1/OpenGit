@@ -31,6 +31,7 @@ export default function Utils() {
     handlePull,
     handlePush,
     prepareStash,
+    handleAddBranch,
   } = useGit();
   const [unstagedFiles, setUnstagedFiles] = useState<File[]>([]);
   const [commitMessage, setCommitMessage] = useState<string>('');
@@ -65,10 +66,6 @@ export default function Utils() {
         }, 500);
       });
     setAction(GitAction.None);
-  };
-
-  const handleAddBranch = () => {
-    setAction(GitAction.AddBranch);
   };
 
   const addBranch = () => {

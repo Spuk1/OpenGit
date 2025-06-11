@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 import { useEffect, useState } from 'react';
@@ -5,10 +6,10 @@ import './CommitPanel.css';
 import { useGit } from '../../ContextManager/GitContext';
 
 export default function CommitPanel() {
-  const [unstaged, setUnstaged] = useState<string[]>([]);
   const [staged, setStaged] = useState<string[]>([]);
   const [commitMessage, setCommitMessage] = useState('');
-  const { selectedRepository, selectedBranch } = useGit();
+  const { selectedRepository, selectedBranch, setUnstaged, unstaged } =
+    useGit();
 
   const loadChanges = async () => {
     try {
