@@ -38,6 +38,7 @@ export default function SourceTree() {
   } | null>(null);
 
   const renderItem = (node: TreeNodeGit): ReactElement => {
+    console.log(node.ahead, node.behind);
     const label = node.uri.split('/').pop() || '';
     const Icon: IconType = node.uri.includes(selectedBranch)
       ? GoCheck
