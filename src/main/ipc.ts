@@ -9,7 +9,33 @@ async function initExeca() {
   return import('execa');
 }
 
-initExeca();
+export default async function initSSHAgent() {
+  const { execa } = await initExeca();
+  const { stdout } = await execa('eval $(ssh-agent)');
+  return stdout;
+}
+
+ipcMain.handle(
+  'add-ssh-keys',
+  async (_event: IpcMainInvokeEvent, keys: string[]): Promise<any> => {
+    const { execa } = await initExeca();
+    keys.forEach((key) => {
+      execa('ssh-add', [key]);
+    });
+  },
+);
+
+ipcMain.handle(
+  'get-branch',
+  async (_event: IpcMainInvokeEvent): Promise<string> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    const { stdout } = await execa('git', ['branch', '--show-current'], {
+      cwd: selectedRepoPath,
+    });
+    return stdout.trim();
+  },
+);
 
 ipcMain.handle(
   'open-file-dialog',
