@@ -1,9 +1,11 @@
+/* eslint-disable no-alert */
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 // ContextMenu.tsx
 import { useEffect } from 'react';
-import './ContextMenu.css'; // Optional: for styling
+import './ContextMenu.css';
+import { useGit } from '../../ContextManager/GitContext';
 
 export default function ContextMenu({
   x,
@@ -16,6 +18,13 @@ export default function ContextMenu({
   uri: string;
   onClose: () => void;
 }) {
+  const {
+    handleAddBranch,
+    handlePull,
+    handlePush,
+    setSelectedBranch,
+    handleDeleteBranch,
+  } = useGit();
   useEffect(() => {
     const handleClick = () => onClose();
     window.addEventListener('click', handleClick);
@@ -24,9 +33,39 @@ export default function ContextMenu({
 
   const branch = uri.replace(/^\/(branches|remote)\//, '');
 
-  const handleAction = (action: string) => {
-    console.log(`${action} on ${uri}`);
-    // action
+  const handleAction = async (action: string) => {
+    switch (action) {
+      case 'Checkout':
+        setSelectedBranch(branch);
+        break;
+      case 'Fast-Forward':
+        // window.electron.ipcRenderer.invoke('fast-forward', branch);
+        alert('Coming soon!');
+        break;
+      case 'Pull':
+        handlePull();
+        break;
+      case 'Push':
+        handlePush();
+        break;
+      case 'Create PR':
+        alert('Coming soon!');
+        // window.electron.ipcRenderer.invoke('create-pr', branch);
+        break;
+      case 'New Branch':
+        handleAddBranch();
+        // window.electron.ipcRenderer.invoke('new-branch', branch);
+        break;
+      case 'Rename':
+        alert('Coming soon!');
+        // window.electron.ipcRenderer.invoke('rename', branch);
+        break;
+      case 'Delete':
+        handleDeleteBranch(branch, uri.includes('remote'));
+        break;
+      default:
+        break;
+    }
     onClose();
   };
 
@@ -45,7 +84,6 @@ export default function ContextMenu({
       </div>
       <hr />
       <div onClick={() => handleAction('New Branch')}>New Branch...</div>
-      <div onClick={() => handleAction('New Tag')}>New Tag...</div>
       <hr />
       <div onClick={() => handleAction('Rename')}>Rename '{branch}'</div>
       <div onClick={() => handleAction('Delete')}>Delete '{branch}'</div>
