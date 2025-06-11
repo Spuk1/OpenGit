@@ -43,6 +43,8 @@ type GitContextType = {
   handlePull: () => void;
   handlePush: () => void;
   prepareStash: (setUnstagedFiles: CallableFunction) => void;
+  handleAddBranch: () => void;
+  handleDeleteBranch: (branch: string, remote: boolean) => void;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
@@ -105,6 +107,11 @@ export function GitProvider({ children }: { children: ReactNode }) {
       }
     }
   }
+
+  // TODO: add source branch
+  const handleAddBranch = () => {
+    setAction(GitAction.AddBranch);
+  };
 
   useEffect(() => {
     getSelectedRepository();
@@ -218,6 +225,20 @@ export function GitProvider({ children }: { children: ReactNode }) {
     setAction(GitAction.Stash);
   };
 
+  function handleDeleteBranch(branch: string, remote: boolean = false) {
+    if (!window.confirm(`Are you sure you want to delete '${branch}'?`)) {
+      window.electron.ipcRenderer
+        .invoke('delete-branch', branch, remote)
+        .then(() => {
+          console.log('deleted branch');
+          return null;
+        })
+        .catch((err) => {
+          alert(err);
+        });
+    }
+  }
+
   function getSelectedRepositoryFromIndex(): Repository {
     if (repositories.length === 0) {
       return {
@@ -230,8 +251,15 @@ export function GitProvider({ children }: { children: ReactNode }) {
   }
 
   function setSelectedBranch(branch: string) {
+    const branchPath = branch.replace(/^\/(branches|remote)\//, '');
     const newRepos = [...repositories];
     newRepos[selectedRepository].branch = branch;
+    window.electron.ipcRenderer
+      .invoke('checkout-branch', branchPath)
+      .then(() => {
+        return null;
+      })
+      .catch((err) => alert(err));
     setRepositories(newRepos);
     localStorage.setItem('repositories', JSON.stringify(newRepos));
   }
@@ -254,6 +282,8 @@ export function GitProvider({ children }: { children: ReactNode }) {
         handlePull,
         handlePush,
         prepareStash,
+        handleAddBranch,
+        handleDeleteBranch,
       }}
     >
       {children}
