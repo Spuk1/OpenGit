@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useRef, useState } from 'react';
+import { ReactElement, useEffect, useRef, useState } from 'react';
 import './SourceTree.css';
 import {
   GoLog,
@@ -23,11 +23,11 @@ import Divider from '../Divider/Divider';
 import { useGit } from '../../ContextManager/GitContext';
 import ContextMenu from '../ContextMenu/ContextMenu';
 
+type TreeNodeGit = TreeNode<{ behind: number; ahead: number }>;
+
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
-  const [tree, setTree] = useState<
-    TreeNode<{ behind?: number; ahead?: number }> | undefined
-  >(undefined);
+  const [tree, setTree] = useState<TreeNodeGit | undefined>(undefined);
   const { selectedRepository, setSelectedBranch, selectedBranch, action } =
     useGit();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,7 +37,7 @@ export default function SourceTree() {
     uri: string;
   } | null>(null);
 
-  const renderItem = (node: TreeNode<{ behind: number; ahead: number }>) => {
+  const renderItem = (node: TreeNodeGit): ReactElement => {
     const label = node.uri.split('/').pop() || '';
     const Icon: IconType = node.uri.includes(selectedBranch)
       ? GoCheck
@@ -66,31 +66,31 @@ export default function SourceTree() {
     );
   };
 
-  function branchesToTree(
+  async function branchesToTree(
     local: string[],
     remote: string[],
     stashes: string[],
-  ): TreeNode<{ ahead: number; behind: number }> {
+  ): Promise<TreeNodeGit> {
     const createNode = (
       uri: string,
       ahead: number,
       behind: number,
       isFile = false,
-    ): TreeNode<{ ahead: number; behind: number }> => ({
+    ): TreeNodeGit => ({
       type: isFile ? 'file' : 'directory',
       uri,
-      expanded: selectedBranch.includes(uri),
+      expanded: selectedBranch.includes(uri), // still fine
       children: [],
       ahead,
       behind,
     });
 
     const insertBranch = async (
-      root: TreeNode,
+      root: TreeNodeGit,
       branchPath: string,
       basePath: string,
     ) => {
-      let refs;
+      let refs: string;
       try {
         refs = await window.electron.ipcRenderer.invoke(
           'get-branch-revs',
@@ -98,9 +98,10 @@ export default function SourceTree() {
         );
       } catch (err) {
         console.error('Failed to get branch refs', err);
+        refs = '0\t0'; // fallback
       }
 
-      const commits = refs.split('\t');
+      const [ahead, behind] = refs.split('\t').map(Number);
       const parts = branchPath.split('/');
       let current = root;
       let currentUri = basePath;
@@ -116,8 +117,8 @@ export default function SourceTree() {
         if (!existing) {
           existing = createNode(
             currentUri,
-            commits[0],
-            commits[1],
+            ahead,
+            behind,
             i === parts.length - 1,
           );
           current.children?.push(existing);
@@ -128,39 +129,52 @@ export default function SourceTree() {
       }
     };
 
-    const localRoot: TreeNode = {
+    const localRoot: TreeNodeGit = {
       type: 'directory',
       uri: '/branches',
-      expanded: true,
       children: [],
+      behind: 0,
+      ahead: 0,
+      expanded: true,
     };
 
-    const remoteRoot: TreeNode = {
+    const remoteRoot: TreeNodeGit = {
       type: 'directory',
       uri: '/remote',
-      expanded: true,
       children: [],
+      behind: 0,
+      ahead: 0,
+      expanded: true,
     };
 
-    const stashRoot: TreeNode = {
+    const stashRoot: TreeNodeGit = {
       type: 'directory',
       uri: '/stashes',
+      behind: 0,
+      ahead: 0,
       expanded: true,
       children: stashes.map((stash) => ({
         type: 'file',
         uri: `/stashes/${stash}`,
         expanded: false,
+        behind: 0,
+        ahead: 0,
         children: [],
       })),
     };
 
-    local.forEach((branch) => insertBranch(localRoot, branch, '/branches'));
-    remote.forEach((branch) => insertBranch(remoteRoot, branch, '/remote'));
+    // await all insertions
+    await Promise.all([
+      ...local.map((branch) => insertBranch(localRoot, branch, '/branches')),
+      ...remote.map((branch) => insertBranch(remoteRoot, branch, '/remote')),
+    ]);
 
     return {
       type: 'directory',
       uri: '/',
       expanded: true,
+      behind: 0,
+      ahead: 0,
       children: [localRoot, remoteRoot, stashRoot],
     };
   }
@@ -172,7 +186,7 @@ export default function SourceTree() {
       const stashes: string[] =
         await window.electron.ipcRenderer.invoke('list-stashes');
 
-      const treeData = branchesToTree(
+      const treeData = await branchesToTree(
         local,
         remote,
         stashes.filter((stash) => stash !== ''),
@@ -201,8 +215,9 @@ export default function SourceTree() {
   };
 
   const toggleExpanded: FileTreeProps['onItemClick'] = async (
-    treeNode: TreeNode,
+    node: TreeNode,
   ) => {
+    const treeNode = node as TreeNodeGit;
     if (treeNode.type !== 'directory') {
       if (treeNode.uri.split('/').includes('stashes')) {
         openStashModal(treeNode.uri.replace(/^\/stashes\//, ''));
@@ -224,10 +239,11 @@ export default function SourceTree() {
       await refreshBranches();
       return;
     }
-    setTree((_tree) =>
-      utils.assignTreeNode(_tree, treeNode.uri, {
-        expanded: !treeNode.expanded,
-      }),
+    setTree(
+      (_tree) =>
+        utils.assignTreeNode(_tree, treeNode.uri, {
+          expanded: !treeNode.expanded,
+        }) as TreeNodeGit,
     );
   };
 
@@ -301,7 +317,9 @@ export default function SourceTree() {
       <FileTree
         tree={tree}
         onItemClick={toggleExpanded}
-        itemRenderer={renderItem}
+        itemRenderer={(node) => {
+          return renderItem(node as TreeNodeGit);
+        }}
         activatedUri={selectedBranch}
         draggable
       />
