@@ -28,8 +28,13 @@ type TreeNodeGit = TreeNode<{ behind: number; ahead: number }>;
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
   const [tree, setTree] = useState<TreeNodeGit | undefined>(undefined);
-  const { selectedRepository, setSelectedBranch, selectedBranch, action } =
-    useGit();
+  const {
+    selectedRepository,
+    setSelectedBranch,
+    selectedBranch,
+    action,
+    unstaged,
+  } = useGit();
   const containerRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -297,7 +302,7 @@ export default function SourceTree() {
     setTimeout(() => {
       refreshBranches();
     }, 100);
-  }, [selectedRepository, action]);
+  }, [selectedRepository, action, unstaged]);
 
   return (
     <div className="SourceTreeContainer" ref={containerRef}>

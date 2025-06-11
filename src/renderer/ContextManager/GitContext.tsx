@@ -45,6 +45,8 @@ type GitContextType = {
   prepareStash: (setUnstagedFiles: CallableFunction) => void;
   handleAddBranch: () => void;
   handleDeleteBranch: (branch: string, remote: boolean) => void;
+  unstaged: string[];
+  setUnstaged: (unstaged: string[]) => void;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
@@ -53,6 +55,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
   const [selectedRepository, setSelectedRepository] = useState<number>(0);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [action, setAction] = useState<GitAction>(GitAction.None);
+  const [unstaged, setUnstaged] = useState<string[]>([]);
 
   function addRepository(repo: string) {
     if (
@@ -210,9 +213,9 @@ export function GitProvider({ children }: { children: ReactNode }) {
   const prepareStash = (setUnstagedFiles: CallableFunction) => {
     window.electron.ipcRenderer
       .invoke('list-changes')
-      .then((unstaged) => {
+      .then((unstagedFiles) => {
         setUnstagedFiles(
-          unstaged.map((file: string) => {
+          unstagedFiles.map((file: string) => {
             return { file } as unknown as File;
           }),
         );
@@ -284,6 +287,8 @@ export function GitProvider({ children }: { children: ReactNode }) {
         prepareStash,
         handleAddBranch,
         handleDeleteBranch,
+        unstaged,
+        setUnstaged,
       }}
     >
       {children}
