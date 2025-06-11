@@ -21,7 +21,8 @@ export type Channels =
   | 'list-staged'
   | 'list-stashes'
   | 'use-stash'
-  | 'get-branch';
+  | 'get-branch'
+  | 'get-branch-revs';
 
 const electronHandler = {
   ipcRenderer: {

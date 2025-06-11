@@ -7,3 +7,4 @@
 - allow staging of specific lines within files
 - cloning of repositories
 - workspaces
+- ssh-keys

@@ -87,14 +87,22 @@ export function GitProvider({ children }: { children: ReactNode }) {
     setSelectedRepository(repository);
   }
 
-  function getSelectedRepository() {
-    const repository = localStorage.getItem('selectedRepository');
-    if (repository) {
-      setSelectedRepositoryWrapper(Number(repository));
-    }
+  async function getSelectedRepository() {
     const repos = localStorage.getItem('repositories');
     if (repos) {
-      setRepositories(JSON.parse(repos));
+      const tmpRepositories = JSON.parse(repos);
+
+      const repository = localStorage.getItem('selectedRepository');
+      if (repository) {
+        await window.electron.ipcRenderer.invoke(
+          'set-selected-repository',
+          tmpRepositories[Number(repository)].path,
+        );
+        const resp = await window.electron.ipcRenderer.invoke('get-branch');
+        tmpRepositories[Number(repository)].branch = `/branches/${resp}`;
+        setSelectedRepository(Number(repository));
+        setRepositories(tmpRepositories);
+      }
     }
   }
 
