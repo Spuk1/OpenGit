@@ -96,6 +96,9 @@ export default function CommitPanel() {
       await window.electron.ipcRenderer.invoke('commit', commitMessage.trim());
       setCommitMessage('');
       setAction(GitAction.None);
+      if (unstaged.length === 0) {
+        setSelectedUnstaged(null);
+      }
       await loadChanges();
     } catch (err) {
       console.error('Failed to commit', err);
