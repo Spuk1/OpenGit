@@ -385,3 +385,8 @@ ipcMain.handle('discard-file', async (_event, file) => {
   const { execa } = await initExeca();
   await execa('git', ['checkout', '--', file], { cwd: selectedRepoPath });
 });
+
+ipcMain.handle('merge', async (_event, branch: string) => {
+  const { execa } = await initExeca();
+  await execa('git', ['merge', branch], { cwd: selectedRepoPath });
+});

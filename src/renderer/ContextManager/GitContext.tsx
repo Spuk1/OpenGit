@@ -48,6 +48,7 @@ type GitContextType = {
   handleDeleteBranch: (branch: string, remote: boolean) => void;
   unstaged: string[];
   setUnstaged: (unstaged: string[]) => void;
+  handleMerge: (fromFile: string, toFile: string) => void;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
@@ -110,6 +111,30 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setRepositories(tmpRepositories);
       }
     }
+  }
+
+  function handleMerge(fromFile: string, toFile: string) {
+    if (toFile !== repositories[selectedRepository].branch) {
+      alert('Can only merge into current branch');
+      return;
+    }
+    setAction(GitAction.Commit);
+    window.electron.ipcRenderer
+      .invoke('merge', fromFile, toFile)
+      .then(() => {
+        setAction(GitAction.CommitFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
+        return null;
+      })
+      .catch((error) => {
+        alert(error);
+        setAction(GitAction.CommitFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 500);
+      });
   }
 
   // TODO: add source branch
@@ -297,6 +322,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         handleDeleteBranch,
         unstaged,
         setUnstaged,
+        handleMerge,
       }}
     >
       {children}

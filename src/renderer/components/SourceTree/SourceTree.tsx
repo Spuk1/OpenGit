@@ -34,6 +34,7 @@ export default function SourceTree() {
     selectedBranch,
     action,
     unstaged,
+    handleMerge,
   } = useGit();
   const containerRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -346,6 +347,9 @@ export default function SourceTree() {
         }}
         activatedUri={selectedBranch}
         draggable
+        onDrop={(_event, from, to) => {
+          handleMerge(from, to);
+        }}
       />
       <Divider />
       {contextMenu && (

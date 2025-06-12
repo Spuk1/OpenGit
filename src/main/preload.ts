@@ -27,7 +27,8 @@ export type Channels =
   | 'get-diff'
   | 'stage-lines'
   | 'discard-file'
-  | 'discard-lines';
+  | 'discard-lines'
+  | "merge";
 
 const electronHandler = {
   ipcRenderer: {
