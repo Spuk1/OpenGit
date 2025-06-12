@@ -110,37 +110,75 @@ export default function Utils() {
         Icon={LuGitBranchPlus}
         onClick={handleAddBranch}
       />
-      {action !== GitAction.None && (
+      {action === GitAction.Stash && (
         <Modal>
-          {action === GitAction.Stash && (
-            <div className="StashModal">
-              <h2>Stash</h2>
-              {unstagedFiles.map((file, i) => (
-                <div>
-                  <input
-                    type="checkbox"
-                    key={file.file}
-                    value={file.file}
-                    checked={file.checked}
-                    onChange={(e) => {
-                      const files = [...unstagedFiles];
-                      files[i].checked = e.target.checked;
-                      setUnstagedFiles(files);
-                    }}
-                  />
-                  <span>{file.file}</span>
-                </div>
-              ))}
-              <input
-                style={{ marginTop: '10px' }}
-                type="text"
-                placeholder="Stash message"
-                onChange={(e) => {
-                  setCommitMessage(e.target.value);
+          <div className="StashModal">
+            <h2>Stash</h2>
+            {unstagedFiles.map((file, i) => (
+              <div>
+                <input
+                  type="checkbox"
+                  key={file.file}
+                  value={file.file}
+                  checked={file.checked}
+                  onChange={(e) => {
+                    const files = [...unstagedFiles];
+                    files[i].checked = e.target.checked;
+                    setUnstagedFiles(files);
+                  }}
+                />
+                <span>{file.file}</span>
+              </div>
+            ))}
+            <input
+              style={{ marginTop: '10px' }}
+              type="text"
+              placeholder="Stash message"
+              onChange={(e) => {
+                setCommitMessage(e.target.value);
+              }}
+            />
+            <button type="button" className="button" onClick={handleStash}>
+              Stash
+            </button>
+            <button
+              className="button"
+              type="button"
+              onClick={() => setAction(GitAction.None)}
+            >
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      )}
+      {action === GitAction.AddBranch && (
+        <Modal>
+          <div className="AddBranchModal">
+            <h1>Add Branch</h1>
+            <span>Created at: </span>
+            <span>
+              <GoGitBranch style={{ marginRight: '5px', marginLeft: '5px' }} />
+              {selectedRepository.branch.replace('/branches/', '')}
+            </span>
+            <br />
+            <span>Branch name: </span>
+            <input
+              type="text"
+              onChange={(e) => {
+                setNewBranchName(e.target.value);
+              }}
+              placeholder="Branch name"
+            />
+            <br />
+            <div className="AddBranchButtonContainer">
+              <button
+                className="button"
+                type="button"
+                onClick={() => {
+                  addBranch();
                 }}
-              />
-              <button type="button" className="button" onClick={handleStash}>
-                Stash
+              >
+                Add
               </button>
               <button
                 className="button"
@@ -150,47 +188,7 @@ export default function Utils() {
                 Cancel
               </button>
             </div>
-          )}
-          {action === GitAction.AddBranch && (
-            <div className="AddBranchModal">
-              <h1>Add Branch</h1>
-              <span>Created at: </span>
-              <span>
-                <GoGitBranch
-                  style={{ marginRight: '5px', marginLeft: '5px' }}
-                />
-                {selectedRepository.branch.replace('/branches/', '')}
-              </span>
-              <br />
-              <span>Branch name: </span>
-              <input
-                type="text"
-                onChange={(e) => {
-                  setNewBranchName(e.target.value);
-                }}
-                placeholder="Branch name"
-              />
-              <br />
-              <div className="AddBranchButtonContainer">
-                <button
-                  className="button"
-                  type="button"
-                  onClick={() => {
-                    addBranch();
-                  }}
-                >
-                  Add
-                </button>
-                <button
-                  className="button"
-                  type="button"
-                  onClick={() => setAction(GitAction.None)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </Modal>
       )}
     </div>
