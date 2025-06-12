@@ -317,5 +317,71 @@ ipcMain.handle(
   },
 );
 
-// local: git branch -D branch_name
-// remote: git push origin --delete branch_name
+ipcMain.handle('get-diff', async (_event, file: string) => {
+  const { execa } = await initExeca();
+  const { stdout } = await execa('git', ['diff', '--', file], {
+    cwd: selectedRepoPath,
+  });
+  return stdout;
+});
+
+ipcMain.handle('stage-lines', async (_event, file, lineNumbers) => {
+  const { execa } = await initExeca();
+
+  // Get full diff
+  const { stdout: fullDiff } = await execa(
+    'git',
+    ['diff', '--unified=0', '--', file],
+    {
+      cwd: selectedRepoPath,
+    },
+  );
+
+  // Filter the patch manually based on selected lines
+  const lines = fullDiff.split('\n');
+  const filtered = [];
+  let currentHunk: string[] = [];
+  let keep = false;
+
+  for (const line of lines) {
+    if (line.startsWith('@@')) {
+      const match = line.match(/@@ -(\\d+),?(\\d*) \\+(\\d+),?(\\d*) @@/);
+      const start = match ? parseInt(match[3], 10) : -1;
+      keep = lineNumbers.includes(start);
+      currentHunk = [line];
+    } else if (keep) {
+      currentHunk.push(line);
+    }
+
+    if (
+      keep &&
+      (line.startsWith('+') || line.startsWith('-') || line.trim() === '')
+    ) {
+      filtered.push(...currentHunk);
+      keep = false;
+    }
+  }
+
+  const patch = [
+    `diff --git a/${file} b/${file}`,
+    `index 0000000..0000000 100644`,
+    `--- a/${file}`,
+    `+++ b/${file}`,
+    ...filtered,
+  ].join('\n');
+
+  const { writeFileSync, unlinkSync } = require('fs');
+  const tmp = require('os').tmpdir();
+  const patchPath = `${tmp}/partial.patch`;
+
+  writeFileSync(patchPath, patch);
+  await execa('git', ['apply', '--cached', patchPath], {
+    cwd: selectedRepoPath,
+  });
+  unlinkSync(patchPath);
+});
+
+ipcMain.handle('discard-file', async (_event, file) => {
+  const { execa } = await initExeca();
+  await execa('git', ['checkout', '--', file], { cwd: selectedRepoPath });
+});
