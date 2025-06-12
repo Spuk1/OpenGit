@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import './CommitPanel.css';
 import MonacoEditor, { monaco } from 'react-monaco-editor';
-import { useGit } from '../../ContextManager/GitContext';
+import { GitAction, useGit } from '../../ContextManager/GitContext';
 
 export default function CommitPanel() {
   const [staged, setStaged] = useState<string[]>([]);
@@ -11,7 +11,7 @@ export default function CommitPanel() {
   const [diffText, setDiffText] = useState<string>('');
   const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
   const [commitMessage, setCommitMessage] = useState('');
-  const { selectedRepository, selectedBranch } = useGit();
+  const { selectedRepository, selectedBranch, setAction } = useGit();
 
   const loadChanges = async () => {
     try {
@@ -91,9 +91,11 @@ export default function CommitPanel() {
 
   const handleCommit = async () => {
     if (!commitMessage.trim()) return;
+    setAction(GitAction.Commit);
     try {
       await window.electron.ipcRenderer.invoke('commit', commitMessage.trim());
       setCommitMessage('');
+      setAction(GitAction.None);
       await loadChanges();
     } catch (err) {
       console.error('Failed to commit', err);
