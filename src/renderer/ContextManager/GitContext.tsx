@@ -262,15 +262,17 @@ export function GitProvider({ children }: { children: ReactNode }) {
     }
     const branchPath = branch.replace(/^\/(branches|remote)\//, '');
     const newRepos = [...repositories];
-    newRepos[selectedRepository].branch = branch;
+    if (newRepos.length > 0) {
+      newRepos[selectedRepository].branch = branch;
+    }
     window.electron.ipcRenderer
       .invoke('checkout-branch', branchPath)
       .then(() => {
+        setRepositories(newRepos);
+        localStorage.setItem('repositories', JSON.stringify(newRepos));
         return null;
       })
       .catch((err) => alert(err));
-    setRepositories(newRepos);
-    localStorage.setItem('repositories', JSON.stringify(newRepos));
   }
 
   return (
