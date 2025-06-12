@@ -120,7 +120,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
     }
     setAction(GitAction.Commit);
     window.electron.ipcRenderer
-      .invoke('merge', fromFile, toFile)
+      .invoke('merge', fromFile.replace('/branches/', ''))
       .then(() => {
         setAction(GitAction.CommitFinished);
         setTimeout(() => {
