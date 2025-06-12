@@ -20,6 +20,7 @@ export enum GitAction {
   Stash = 'stashing',
   StashFinished = 'stash finished',
   AddBranch = 'adding branch',
+  DeleteBranch = 'deleting',
   None = 0,
 }
 
@@ -229,14 +230,16 @@ export function GitProvider({ children }: { children: ReactNode }) {
   };
 
   function handleDeleteBranch(branch: string, remote: boolean = false) {
+    setAction(GitAction.DeleteBranch);
     if (window.confirm(`Are you sure you want to delete '${branch}'?`)) {
       window.electron.ipcRenderer
         .invoke('delete-branch', branch, remote)
         .then(() => {
-          console.log('deleted branch');
+          setAction(GitAction.None);
           return null;
         })
         .catch((err) => {
+          setAction(GitAction.None);
           alert(err);
         });
     }
@@ -254,6 +257,9 @@ export function GitProvider({ children }: { children: ReactNode }) {
   }
 
   function setSelectedBranch(branch: string) {
+    if (!branch) {
+      return;
+    }
     const branchPath = branch.replace(/^\/(branches|remote)\//, '');
     const newRepos = [...repositories];
     newRepos[selectedRepository].branch = branch;

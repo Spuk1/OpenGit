@@ -164,7 +164,7 @@ ipcMain.handle(
   async (_event: IpcMainInvokeEvent, branchName: string): Promise<void> => {
     if (!selectedRepoPath) throw new Error('No repository selected');
     const { execa } = await initExeca();
-    await execa('git', ['checkout', '-b', branchName], {
+    await execa('git', ['branch', branchName], {
       cwd: selectedRepoPath,
     });
   },
