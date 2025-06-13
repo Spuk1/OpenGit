@@ -24,10 +24,17 @@ import { useGit } from '../../ContextManager/GitContext';
 import ContextMenu from '../ContextMenu/ContextMenu';
 
 type TreeNodeGit = TreeNode<{ behind: number; ahead: number }>;
+type TreeExtendedData = {
+  [key: string]: {
+    extended: boolean;
+  };
+};
 
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
   const [tree, setTree] = useState<TreeNodeGit | undefined>(undefined);
+  const [treeExtended, setTreeExtended] = useState<TreeExtendedData>({});
+
   const {
     selectedRepository,
     setSelectedBranch,
@@ -85,7 +92,9 @@ export default function SourceTree() {
     ): TreeNodeGit => ({
       type: isFile ? 'file' : 'directory',
       uri,
-      expanded: selectedBranch.includes(uri), // still fine
+      expanded: treeExtended[uri]
+        ? treeExtended[uri].extended
+        : selectedBranch.includes(uri),
       children: [],
       ahead: isFile ? ahead : 0,
       behind: isFile ? behind : 0,
@@ -226,6 +235,9 @@ export default function SourceTree() {
       }
       return;
     }
+    const tmp = { ...treeExtended };
+    tmp[node.uri] = { extended: !node.expanded };
+    setTreeExtended(tmp);
     setTree(
       (_tree) =>
         utils.assignTreeNode(_tree, treeNode.uri, {
