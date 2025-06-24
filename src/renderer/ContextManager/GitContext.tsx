@@ -125,13 +125,13 @@ export function GitProvider({ children }: { children: ReactNode }) {
   }
 
   function handleMerge(fromFile: string, toFile: string) {
-    if (toFile !== repositories[selectedRepository].branch) {
-      alert('Can only merge into current branch');
-      return;
-    }
     setAction(GitAction.Commit);
     window.electron.ipcRenderer
-      .invoke('merge', fromFile.replace('/branches/', ''))
+      .invoke(
+        'merge-branch',
+        fromFile.replace('/branches/', ''),
+        toFile.replace('/branches/', ''),
+      )
       .then(() => {
         setAction(GitAction.CommitFinished);
         setTimeout(() => {

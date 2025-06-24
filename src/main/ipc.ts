@@ -238,8 +238,19 @@ ipcMain.handle(
   async (_event, sourceBranch: string, targetBranch: string) => {
     if (!selectedRepoPath) throw new Error('No repository selected');
     const { execa } = await initExeca();
+    const { stdio } = await execa('git', ['branch', '--show-current'], {
+      cwd: selectedRepoPath,
+    });
+    await execa('git', ['stash', 'push', '-m', 'pre-merge-stash'], {
+      cwd: selectedRepoPath,
+    });
     await execa('git', ['checkout', targetBranch], { cwd: selectedRepoPath });
     await execa('git', ['merge', sourceBranch], { cwd: selectedRepoPath });
+
+    await execa('git', ['checkout', stdio[1]], { cwd: selectedRepoPath });
+    await execa('git', ['stash', 'pop', 'stash^{/pre-merge-stash}'], {
+      cwd: selectedRepoPath,
+    });
   },
 );
 
