@@ -284,19 +284,7 @@ export default function SourceTree() {
       e.preventDefault();
 
       // Call the branch checkout and set selected branch
-      window.electron.ipcRenderer
-        .invoke(
-          'checkout-branch',
-          uri.replace(/^\/branches\//, '').replace(/^\/remote\//, ''),
-        )
-        .then(() => {
-          setSelectedBranch(uri);
-          refreshBranches();
-          return null;
-        })
-        .catch((err) => {
-          alert(err);
-        });
+      setSelectedBranch(uri);
     };
 
     container?.addEventListener('contextmenu', handleContextMenu);
