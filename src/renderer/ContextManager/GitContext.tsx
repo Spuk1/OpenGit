@@ -28,6 +28,7 @@ export type Repository = {
   name: string;
   path: string;
   branch: string;
+  group: number;
 };
 
 type GitContextType = {
@@ -74,10 +75,11 @@ export function GitProvider({ children }: { children: ReactNode }) {
         path: repo,
         name: split[split.length - 1],
         branch: '/branches/main',
+        group: 0,
       } as Repository,
     ];
     setRepositories(newRepos);
-    localStorage.setItem('repositories', JSON.stringify(newRepos));
+    window.electron.ipcRenderer.invoke('save-repositories', newRepos);
   }
 
   async function setSelectedRepositoryWrapper(repository: number) {
@@ -95,19 +97,28 @@ export function GitProvider({ children }: { children: ReactNode }) {
   }
 
   async function getSelectedRepository() {
-    const repos = localStorage.getItem('repositories');
+    const repos = await window.electron.ipcRenderer.invoke('get-repositories');
     if (repos) {
       const tmpRepositories = JSON.parse(repos);
-
       const repository = localStorage.getItem('selectedRepository');
       if (repository) {
-        await window.electron.ipcRenderer.invoke(
-          'set-selected-repository',
-          tmpRepositories[Number(repository)].path,
-        );
-        const resp = await window.electron.ipcRenderer.invoke('get-branch');
-        tmpRepositories[Number(repository)].branch = `/branches/${resp}`;
-        setSelectedRepository(Number(repository));
+        window.electron.ipcRenderer
+          .invoke(
+            'set-selected-repository',
+            tmpRepositories[Number(repository)]
+              ? tmpRepositories[Number(repository)].path
+              : '',
+          )
+          .then(async () => {
+            const resp = await window.electron.ipcRenderer.invoke('get-branch');
+            tmpRepositories[Number(repository)].branch = `/branches/${resp}`;
+            setSelectedRepository(Number(repository));
+            return resp;
+          })
+          .catch((error) => {
+            console.log(error);
+          });
+
         setRepositories(tmpRepositories);
       }
     }
@@ -276,6 +287,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         name: '',
         path: '',
         branch: '',
+        group: 0,
       };
     }
     return repositories[selectedRepository];

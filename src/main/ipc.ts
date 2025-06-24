@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { exec } from 'child_process';
 import { dialog, ipcMain, IpcMainInvokeEvent } from 'electron';
-import path from 'path';
+import { writeFileSync, unlinkSync } from 'fs';
+
+const os = require('os');
 
 let selectedRepoPath: string | null = '';
 
@@ -318,6 +319,7 @@ ipcMain.handle(
 );
 
 ipcMain.handle('get-diff', async (_event, file: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
   const { stdout } = await execa('git', ['diff', '--', file], {
     cwd: selectedRepoPath,
@@ -326,6 +328,7 @@ ipcMain.handle('get-diff', async (_event, file: string) => {
 });
 
 ipcMain.handle('stage-lines', async (_event, file, lineNumbers) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
 
   // Get full diff
@@ -369,9 +372,7 @@ ipcMain.handle('stage-lines', async (_event, file, lineNumbers) => {
     `+++ b/${file}`,
     ...filtered,
   ].join('\n');
-
-  const { writeFileSync, unlinkSync } = require('fs');
-  const tmp = require('os').tmpdir();
+  const tmp = os.tmpdir();
   const patchPath = `${tmp}/partial.patch`;
 
   writeFileSync(patchPath, patch);
@@ -382,11 +383,13 @@ ipcMain.handle('stage-lines', async (_event, file, lineNumbers) => {
 });
 
 ipcMain.handle('discard-file', async (_event, file) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
   await execa('git', ['checkout', '--', file], { cwd: selectedRepoPath });
 });
 
 ipcMain.handle('merge', async (_event, branch: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
   const { execa } = await initExeca();
   await execa('git', ['merge', branch], { cwd: selectedRepoPath });
 });

@@ -28,7 +28,9 @@ export type Channels =
   | 'stage-lines'
   | 'discard-file'
   | 'discard-lines'
-  | "merge";
+  | 'get-repositories'
+  | 'merge'
+  | 'save-repositories';
 
 const electronHandler = {
   ipcRenderer: {

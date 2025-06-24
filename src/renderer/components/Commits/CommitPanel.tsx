@@ -209,9 +209,10 @@ export default function CommitPanel() {
               value={diffText}
               options={{
                 readOnly: true,
-                lineNumbers: 'on',
+                lineNumbers: 'off',
                 glyphMargin: false,
                 detectIndentation: true,
+                minimap: { enabled: false },
                 fontSize: 10,
               }}
               editorDidMount={(editor) => {
