@@ -27,6 +27,10 @@ export default function CommitPanel() {
         await window.electron.ipcRenderer.invoke('list-staged');
       setUnstaged(unstagedFiles);
       setStaged(stagedFiles);
+      if (selectedUnstaged) {
+        // eslint-disable-next-line no-use-before-define
+        loadDiff(selectedUnstaged);
+      }
     } catch (err) {
       console.error('Failed to load changes', err);
     }
@@ -122,9 +126,7 @@ export default function CommitPanel() {
   };
 
   useEffect(() => {
-    setTimeout(() => {
-      loadChanges();
-    }, 100);
+    loadChanges();
   }, [selectedBranch, selectedRepository, action]);
 
   return (
