@@ -171,6 +171,7 @@ export default function SourceTree() {
       root: TreeNodeGit,
       branchPath: string,
       basePath: string,
+      hasRemote: boolean = true,
     ) => {
       const refs: string = basePath.includes('branches')
         ? await window.electron.ipcRenderer.invoke(
@@ -178,9 +179,7 @@ export default function SourceTree() {
             branchPath,
           )
         : '0\t0';
-      const hasRemote: boolean = basePath.includes('branches')
-        ? await window.electron.ipcRenderer.invoke('check-remote', branchPath)
-        : true;
+
       const [behind, ahead] = refs.split('\t').map(Number);
       const parts = branchPath.split('/');
       let current = root;
@@ -250,7 +249,16 @@ export default function SourceTree() {
 
     // await all insertions
     await Promise.all([
-      ...local.map((branch) => insertBranch(localRoot, branch, '/branches')),
+      ...local.map((branch) =>
+        insertBranch(
+          localRoot,
+          branch,
+          '/branches',
+          remote.findIndex((remoteBranch) => {
+            return remoteBranch === branch;
+          }) >= 0,
+        ),
+      ),
       ...remote.map((branch) => insertBranch(remoteRoot, branch, '/remote')),
     ]);
 
