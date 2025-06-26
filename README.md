@@ -2,6 +2,9 @@
 OpenGit is a free, open-source Git client built with modern web technologies. It provides a user-friendly interface for version control operations, making Git more accessible to developers of all skill levels. Built on Electron, React, and TypeScript, OpenGit combines the power of Git with a clean, cross-platform desktop experience.
 
 ---
+<img src="./assets/OpenGit.png" alt="image of the git client" style="width:800px;" />
+
+---
 
 ## Features
 - Intuitive GUI for common Git operations (commit, push, pull, branch, etc.)
@@ -9,7 +12,7 @@ OpenGit is a free, open-source Git client built with modern web technologies. It
 - Repository visualization with commit history graph
 - Diff viewer with syntax highlighting
 - Responsive and customizable interface
-- Dark/Light theme support
+- Dark theme support
 - Built with TypeScript for type safety
 - Modern React-based UI components
 
