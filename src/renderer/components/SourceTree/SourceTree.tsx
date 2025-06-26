@@ -21,6 +21,7 @@ import '@sinm/react-file-tree/styles.css';
 import '@sinm/react-file-tree/icons.css';
 import { IconType } from 'react-icons';
 import { IoCloudOfflineOutline } from 'react-icons/io5';
+
 import Divider from '../Divider/Divider';
 import { GitAction, useGit } from '../../ContextManager/GitContext';
 import ContextMenu from '../ContextMenu/ContextMenu';
@@ -35,6 +36,54 @@ type TreeExtendedData = {
     extended: boolean;
   };
 };
+
+export function orderBy<T>(
+  array: T[],
+  iteratees: Array<(item: T) => any>,
+  orders: Array<'asc' | 'desc'> = [],
+): T[] {
+  // Create a copy to avoid mutating the original
+  return array.slice().sort((a, b) => {
+    for (let i = 0; i < iteratees.length; i++) {
+      const iteratee = iteratees[i];
+      const order: 'asc' | 'desc' = orders[i] || 'asc';
+      const valA = iteratee(a);
+      const valB = iteratee(b);
+
+      // Compare values
+      let comparison = 0;
+
+      // Handle undefined or null
+      if (valA == null && valB != null) {
+        comparison = -1;
+      } else if (valA != null && valB == null) {
+        comparison = 1;
+      } else if (typeof valA === 'string' && typeof valB === 'string') {
+        comparison = valA.localeCompare(valB);
+      } else if (valA > valB) {
+        comparison = 1;
+      } else if (valA < valB) {
+        comparison = -1;
+      }
+
+      if (comparison !== 0) {
+        return order === 'asc' ? comparison : -comparison;
+      }
+      // Otherwise, move to the next iteratee
+    }
+    return 0;
+  });
+}
+
+const sorter = (treeNodes: TreeNode[]) =>
+  orderBy(
+    treeNodes,
+    [
+      (node) => (node.type === 'directory' ? 0 : 1),
+      (node) => utils.getFileName(node.uri),
+    ],
+    ['asc', 'asc'],
+  );
 
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
@@ -372,6 +421,7 @@ export default function SourceTree() {
         onDrop={(_event, from, to) => {
           handleMerge(from, to);
         }}
+        sorter={sorter}
       />
       <Divider />
       {contextMenu && (
