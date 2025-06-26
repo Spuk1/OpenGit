@@ -159,8 +159,10 @@ export default function Utils() {
             <span>Branch name: </span>
             <input
               type="text"
+              value={newBranchName}
               onChange={(e) => {
-                setNewBranchName(e.target.value);
+                const string = e.target.value.replaceAll(' ', '-');
+                setNewBranchName(string);
               }}
               placeholder="Branch name"
             />

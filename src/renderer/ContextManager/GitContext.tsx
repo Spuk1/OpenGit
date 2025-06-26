@@ -154,7 +154,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
     setAction(GitAction.AddBranch);
   };
 
-  const handleSelectFile = async () => {
+  const handleSelectFile = () => {
     window.electron.ipcRenderer
       .invoke('open-file-dialog')
       .then((resp) => {
@@ -167,7 +167,8 @@ export function GitProvider({ children }: { children: ReactNode }) {
       .catch(() => alert('Directory is not a valid git repository!'));
   };
 
-  const handleFetch = async () => {
+  const handleFetch = () => {
+    if (action !== GitAction.None) return;
     setAction(GitAction.Fetch);
     window.electron.ipcRenderer
       .invoke('fetch')
@@ -187,7 +188,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
       });
   };
 
-  const handlePull = async () => {
+  const handlePull = () => {
     setAction(GitAction.Pull);
     window.electron.ipcRenderer
       .invoke('pull')
@@ -208,7 +209,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
     setAction(GitAction.None);
   };
 
-  const handlePush = async (setUpstream = false) => {
+  const handlePush = (setUpstream = false) => {
     setAction(GitAction.Push);
     window.electron.ipcRenderer
       .invoke('push', setUpstream)
