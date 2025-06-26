@@ -21,6 +21,7 @@ export enum GitAction {
   StashFinished = 'stash finished',
   AddBranch = 'adding branch',
   DeleteBranch = 'deleting',
+  Pop = 'pop',
   None = 0,
 }
 
@@ -136,7 +137,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.CommitFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
         return null;
       })
       .catch((error) => {
@@ -144,7 +145,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.CommitFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
       });
   }
 
@@ -152,11 +153,6 @@ export function GitProvider({ children }: { children: ReactNode }) {
   const handleAddBranch = () => {
     setAction(GitAction.AddBranch);
   };
-
-  useEffect(() => {
-    getSelectedRepository();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleSelectFile = async () => {
     window.electron.ipcRenderer
@@ -179,7 +175,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.FetchFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
         return null;
       })
       .catch((error) => {
@@ -187,7 +183,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.FetchFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
       });
   };
 
@@ -199,7 +195,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.PullFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
         return null;
       })
       .catch((error) => {
@@ -207,7 +203,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.PullFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
       });
     setAction(GitAction.None);
   };
@@ -220,7 +216,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
         return null;
       })
       .catch((error: Error) => {
@@ -235,14 +231,14 @@ export function GitProvider({ children }: { children: ReactNode }) {
           setAction(GitAction.PushFinshed);
           setTimeout(() => {
             setAction(GitAction.None);
-          }, 500);
+          }, 100);
           return;
         }
         alert(error);
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
       });
     setAction(GitAction.None);
   };
@@ -311,6 +307,17 @@ export function GitProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => alert(err));
   }
+
+  useEffect(() => {
+    getSelectedRepository();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => handleFetch();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   return (
     <GitContext.Provider

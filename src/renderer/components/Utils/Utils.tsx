@@ -38,16 +38,11 @@ export default function Utils() {
   const [newBranchName, setNewBranchName] = useState<string>('');
 
   const handleStash = async () => {
-    if (commitMessage.length === 0) {
-      alert('Please enter a stash name');
-      return;
-    }
     const files = unstagedFiles
       .filter((file) => file.checked)
       .map((file) => file.file);
     if (files.length === 0) {
-      alert('Please select files to stash');
-      return;
+      files.push('*');
     }
     window.electron.ipcRenderer
       .invoke('stash', commitMessage, files)

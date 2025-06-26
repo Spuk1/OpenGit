@@ -29,8 +29,9 @@ export type Channels =
   | 'discard-file'
   | 'discard-lines'
   | 'get-repositories'
-  | 'merge'
-  | 'save-repositories';
+  | 'merge-branch'
+  | 'save-repositories'
+  | 'check-remote';
 
 const electronHandler = {
   ipcRenderer: {

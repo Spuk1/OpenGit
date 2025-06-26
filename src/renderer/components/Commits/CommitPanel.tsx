@@ -6,12 +6,18 @@ import { GitAction, useGit } from '../../ContextManager/GitContext';
 
 export default function CommitPanel() {
   const [staged, setStaged] = useState<string[]>([]);
-  const [unstaged, setUnstaged] = useState<string[]>([]);
   const [selectedUnstaged, setSelectedUnstaged] = useState<string | null>(null);
   const [diffText, setDiffText] = useState<string>('');
   const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
   const [commitMessage, setCommitMessage] = useState('');
-  const { selectedRepository, selectedBranch, setAction } = useGit();
+  const {
+    selectedRepository,
+    selectedBranch,
+    setAction,
+    unstaged,
+    setUnstaged,
+    action,
+  } = useGit();
 
   const loadChanges = async () => {
     try {
@@ -90,10 +96,10 @@ export default function CommitPanel() {
   };
 
   const handleCommit = async () => {
-    if (!commitMessage.trim()) return;
+    if (!commitMessage) return;
     setAction(GitAction.Commit);
     try {
-      await window.electron.ipcRenderer.invoke('commit', commitMessage.trim());
+      await window.electron.ipcRenderer.invoke('commit', commitMessage);
       setCommitMessage('');
       setAction(GitAction.None);
       if (unstaged.length === 0) {
@@ -116,17 +122,10 @@ export default function CommitPanel() {
   };
 
   useEffect(() => {
-    loadChanges();
-    const onFocus = () => loadChanges();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, []);
-
-  useEffect(() => {
     setTimeout(() => {
       loadChanges();
     }, 100);
-  }, [selectedBranch, selectedRepository]);
+  }, [selectedBranch, selectedRepository, action]);
 
   return (
     <div className="CommitPanel">
@@ -269,7 +268,7 @@ export default function CommitPanel() {
           onKeyDown={() => {}}
           tabIndex={0}
           onClick={handleCommit}
-          disabled={!commitMessage.trim() || staged.length === 0}
+          disabled={!commitMessage || staged.length === 0}
         >
           Commit
         </button>

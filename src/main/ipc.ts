@@ -114,14 +114,14 @@ ipcMain.handle(
   ): Promise<void> => {
     if (!selectedRepoPath) throw new Error('No repository selected');
     const { execa } = await initExeca();
-    let string = '';
-    for (let i = 0; i < files.length; i += 1) {
-      string += `${files[i]}${i === files.length - 1 ? '' : ' '}`;
-    }
-    await execa('git', ['add', string], { cwd: selectedRepoPath });
-    await execa('git', ['stash', 'push', '-m', name, string], {
-      cwd: selectedRepoPath,
-    });
+    const resp = await execa(
+      'git',
+      ['stash', 'push', '-u', '-m', name, ...files],
+      {
+        cwd: selectedRepoPath,
+      },
+    );
+    console.log(resp);
   },
 );
 
@@ -404,3 +404,24 @@ ipcMain.handle('merge', async (_event, branch: string) => {
   const { execa } = await initExeca();
   await execa('git', ['merge', branch], { cwd: selectedRepoPath });
 });
+
+// git config --get branch.feature/diff-viewer.remote
+ipcMain.handle(
+  'check-remote',
+  async (_event, branch: string): Promise<boolean> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    try {
+      const result = await execa(
+        'git',
+        ['config', '--get', `branch.${branch}.remote`],
+        {
+          cwd: selectedRepoPath,
+        },
+      );
+      return result.stdout[1].length > 0;
+    } catch {
+      return false;
+    }
+  },
+);
