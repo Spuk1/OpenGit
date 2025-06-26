@@ -1,6 +1,6 @@
 .CommitPanel {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1.5fr 2fr;
   gap: 16px;
   padding: 16px;
   background-color: #1e1e1e;
@@ -13,13 +13,11 @@
 .ChangesSection {
   display: flex;
   gap: 16px;
-  flex: 1;
   overflow: hidden;
   flex-direction: column;
 }
 
 .ChangesGroup {
-  flex: 1;
   display: flex;
   flex-direction: column;
   background-color: #2a2a2a;
@@ -27,7 +25,6 @@
   border-radius: 6px;
   padding: 12px;
   overflow: hidden;
-  max-height: 55vh;
 }
 
 .ChangesGroup h3 {
@@ -42,6 +39,7 @@
   padding: 0;
   margin: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
 }
 
@@ -94,4 +92,29 @@ button:not(:disabled):hover {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+}
+
+.DiffViewer {
+  width: 100%;
+}
+
+.selected {
+  background-color: #3f3f3f;
+}
+
+.monaco-editor .line-added {
+  background-color: rgba(76, 175, 80, 0.2); /* Light green */
+}
+
+.monaco-editor .line-removed {
+  background-color: rgba(244, 67, 54, 0.2); /* Light red */
+}
+
+.monaco-editor .line-selected {
+  outline: 1px solid rgba(0, 123, 255, 0.5);
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+#test {
+  font-family: 'Courier New', Courier, monospace;
 }

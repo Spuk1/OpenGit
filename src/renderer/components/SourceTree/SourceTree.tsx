@@ -9,6 +9,7 @@ import {
   GoGitBranch,
   GoCheck,
   GoArrowDown,
+  GoGitPullRequestClosed,
 } from 'react-icons/go';
 import {
   FileTree,
@@ -19,21 +20,84 @@ import {
 import '@sinm/react-file-tree/styles.css';
 import '@sinm/react-file-tree/icons.css';
 import { IconType } from 'react-icons';
+import { IoCloudOfflineOutline } from 'react-icons/io5';
+
 import Divider from '../Divider/Divider';
-import { useGit } from '../../ContextManager/GitContext';
+import { GitAction, useGit } from '../../ContextManager/GitContext';
 import ContextMenu from '../ContextMenu/ContextMenu';
 
-type TreeNodeGit = TreeNode<{ behind: number; ahead: number }>;
+type TreeNodeGit = TreeNode<{
+  hasRemote: boolean;
+  behind: number;
+  ahead: number;
+}>;
+type TreeExtendedData = {
+  [key: string]: {
+    extended: boolean;
+  };
+};
+
+export function orderBy<T>(
+  array: T[],
+  iteratees: Array<(item: T) => any>,
+  orders: Array<'asc' | 'desc'> = [],
+): T[] {
+  // Create a copy to avoid mutating the original
+  return array.slice().sort((a, b) => {
+    for (let i = 0; i < iteratees.length; i++) {
+      const iteratee = iteratees[i];
+      const order: 'asc' | 'desc' = orders[i] || 'asc';
+      const valA = iteratee(a);
+      const valB = iteratee(b);
+
+      // Compare values
+      let comparison = 0;
+
+      // Handle undefined or null
+      if (valA == null && valB != null) {
+        comparison = -1;
+      } else if (valA != null && valB == null) {
+        comparison = 1;
+      } else if (typeof valA === 'string' && typeof valB === 'string') {
+        comparison = valA.localeCompare(valB);
+      } else if (valA > valB) {
+        comparison = 1;
+      } else if (valA < valB) {
+        comparison = -1;
+      }
+
+      if (comparison !== 0) {
+        return order === 'asc' ? comparison : -comparison;
+      }
+      // Otherwise, move to the next iteratee
+    }
+    return 0;
+  });
+}
+
+const sorter = (treeNodes: TreeNode[]) =>
+  orderBy(
+    treeNodes,
+    [
+      (node) => (node.type === 'directory' ? 0 : 1),
+      (node) => utils.getFileName(node.uri),
+    ],
+    ['asc', 'asc'],
+  );
 
 export default function SourceTree() {
   const [selected, SetSelected] = useState<Number>(1);
   const [tree, setTree] = useState<TreeNodeGit | undefined>(undefined);
+  const [treeExtended, setTreeExtended] = useState<TreeExtendedData>({});
+
   const {
     selectedRepository,
     setSelectedBranch,
     selectedBranch,
     action,
     unstaged,
+    handleMerge,
+    setAction,
   } = useGit();
   const containerRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -51,22 +115,31 @@ export default function SourceTree() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {node.type === 'directory' ? <GoFileDirectory /> : <Icon />}
         <span>{label}</span>
-        {node.behind > 0 && (
-          <span>
+        <span style={{ position: 'absolute', right: 15, top: 7 }}>
+          {typeof node.behind === 'number' && node.behind > 0 && (
             <span>
-              <GoArrowDown />
+              <span>
+                <GoArrowDown />
+              </span>
+              <span>{node.behind}</span>
             </span>
-            <span>{node.behind}</span>
-          </span>
-        )}
-        {node.ahead > 0 && (
-          <span>
+          )}
+          {typeof node.ahead === 'number' && node.ahead > 0 && (
             <span>
-              <GoArrowUp />
+              <span>
+                <GoArrowUp />
+              </span>
+              <span>{node.ahead}</span>
             </span>
-            <span>{node.ahead}</span>
-          </span>
-        )}
+          )}
+          {!node.hasRemote && (
+            <span>
+              <span>
+                <IoCloudOfflineOutline />
+              </span>
+            </span>
+          )}
+        </span>
       </div>
     );
   };
@@ -80,14 +153,18 @@ export default function SourceTree() {
       uri: string,
       ahead: number,
       behind: number,
+      hasRemote: boolean,
       isFile = false,
     ): TreeNodeGit => ({
       type: isFile ? 'file' : 'directory',
       uri,
-      expanded: selectedBranch.includes(uri), // still fine
+      expanded: treeExtended[uri]
+        ? treeExtended[uri].extended
+        : selectedBranch.includes(uri),
       children: [],
       ahead: isFile ? ahead : 0,
       behind: isFile ? behind : 0,
+      hasRemote: isFile ? hasRemote : true,
     });
 
     const insertBranch = async (
@@ -101,6 +178,9 @@ export default function SourceTree() {
             branchPath,
           )
         : '0\t0';
+      const hasRemote: boolean = basePath.includes('branches')
+        ? await window.electron.ipcRenderer.invoke('check-remote', branchPath)
+        : true;
       const [behind, ahead] = refs.split('\t').map(Number);
       const parts = branchPath.split('/');
       let current = root;
@@ -119,6 +199,7 @@ export default function SourceTree() {
             currentUri,
             ahead,
             behind,
+            hasRemote,
             i === parts.length - 1,
           );
           current.children?.push(existing);
@@ -136,6 +217,7 @@ export default function SourceTree() {
       behind: 0,
       ahead: 0,
       expanded: true,
+      hasRemote: true,
     };
 
     const remoteRoot: TreeNodeGit = {
@@ -145,6 +227,7 @@ export default function SourceTree() {
       behind: 0,
       ahead: 0,
       expanded: true,
+      hasRemote: true,
     };
 
     const stashRoot: TreeNodeGit = {
@@ -153,6 +236,7 @@ export default function SourceTree() {
       behind: 0,
       ahead: 0,
       expanded: true,
+      hasRemote: true,
       children: stashes.map((stash) => ({
         type: 'file',
         uri: `/stashes/${stash}`,
@@ -160,6 +244,7 @@ export default function SourceTree() {
         behind: 0,
         ahead: 0,
         children: [],
+        hasRemote: true,
       })),
     };
 
@@ -176,6 +261,7 @@ export default function SourceTree() {
       behind: 0,
       ahead: 0,
       children: [localRoot, remoteRoot, stashRoot],
+      hasRemote: true,
     };
   }
 
@@ -200,10 +286,12 @@ export default function SourceTree() {
   const openStashModal = (stash: string) => {
     // eslint-disable-next-line no-alert, no-restricted-globals
     if (confirm(`Do you want to use stash ${stash}?`)) {
+      setAction(GitAction.Pop);
       const st: string = `stash@${stash.split(':')[0]}`;
       window.electron.ipcRenderer
         .invoke('use-stash', st)
         .then((resp) => {
+          setAction(GitAction.None);
           refreshBranches();
           return resp;
         })
@@ -225,6 +313,9 @@ export default function SourceTree() {
       }
       return;
     }
+    const tmp = { ...treeExtended };
+    tmp[node.uri] = { extended: !node.expanded };
+    setTreeExtended(tmp);
     setTree(
       (_tree) =>
         utils.assignTreeNode(_tree, treeNode.uri, {
@@ -234,10 +325,6 @@ export default function SourceTree() {
   };
 
   useEffect(() => {
-    const onFocus = () => {
-      refreshBranches();
-    };
-
     const container = containerRef.current;
 
     const handleContextMenu = (e: MouseEvent) => {
@@ -276,12 +363,9 @@ export default function SourceTree() {
 
     container?.addEventListener('contextmenu', handleContextMenu);
     container?.addEventListener('dblclick', handleDoubleClick);
-    window.addEventListener('focus', onFocus);
-
     return () => {
       container?.removeEventListener('contextmenu', handleContextMenu);
       container?.removeEventListener('dblclick', handleDoubleClick);
-      window.removeEventListener('focus', onFocus);
     };
   }, []);
 
@@ -334,6 +418,10 @@ export default function SourceTree() {
         }}
         activatedUri={selectedBranch}
         draggable
+        onDrop={(_event, from, to) => {
+          handleMerge(from, to);
+        }}
+        sorter={sorter}
       />
       <Divider />
       {contextMenu && (

@@ -20,6 +20,8 @@ export enum GitAction {
   Stash = 'stashing',
   StashFinished = 'stash finished',
   AddBranch = 'adding branch',
+  DeleteBranch = 'deleting',
+  Pop = 'pop',
   None = 0,
 }
 
@@ -27,6 +29,7 @@ export type Repository = {
   name: string;
   path: string;
   branch: string;
+  group: number;
 };
 
 type GitContextType = {
@@ -47,6 +50,7 @@ type GitContextType = {
   handleDeleteBranch: (branch: string, remote: boolean) => void;
   unstaged: string[];
   setUnstaged: (unstaged: string[]) => void;
+  handleMerge: (fromFile: string, toFile: string) => void;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
@@ -72,10 +76,11 @@ export function GitProvider({ children }: { children: ReactNode }) {
         path: repo,
         name: split[split.length - 1],
         branch: '/branches/main',
+        group: 0,
       } as Repository,
     ];
     setRepositories(newRepos);
-    localStorage.setItem('repositories', JSON.stringify(newRepos));
+    window.electron.ipcRenderer.invoke('save-repositories', newRepos);
   }
 
   async function setSelectedRepositoryWrapper(repository: number) {
@@ -93,33 +98,61 @@ export function GitProvider({ children }: { children: ReactNode }) {
   }
 
   async function getSelectedRepository() {
-    const repos = localStorage.getItem('repositories');
+    const repos = await window.electron.ipcRenderer.invoke('get-repositories');
     if (repos) {
       const tmpRepositories = JSON.parse(repos);
-
       const repository = localStorage.getItem('selectedRepository');
       if (repository) {
-        await window.electron.ipcRenderer.invoke(
-          'set-selected-repository',
-          tmpRepositories[Number(repository)].path,
-        );
-        const resp = await window.electron.ipcRenderer.invoke('get-branch');
-        tmpRepositories[Number(repository)].branch = `/branches/${resp}`;
-        setSelectedRepository(Number(repository));
+        window.electron.ipcRenderer
+          .invoke(
+            'set-selected-repository',
+            tmpRepositories[Number(repository)]
+              ? tmpRepositories[Number(repository)].path
+              : '',
+          )
+          .then(async () => {
+            const resp = await window.electron.ipcRenderer.invoke('get-branch');
+            tmpRepositories[Number(repository)].branch = `/branches/${resp}`;
+            setSelectedRepository(Number(repository));
+            return resp;
+          })
+          .catch((error) => {
+            console.log(error);
+          });
+
         setRepositories(tmpRepositories);
       }
     }
+  }
+
+  function handleMerge(fromFile: string, toFile: string) {
+    setAction(GitAction.Commit);
+    window.electron.ipcRenderer
+      .invoke(
+        'merge-branch',
+        fromFile.replace('/branches/', ''),
+        toFile.replace('/branches/', ''),
+      )
+      .then(() => {
+        setAction(GitAction.CommitFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 100);
+        return null;
+      })
+      .catch((error) => {
+        alert(error);
+        setAction(GitAction.CommitFinished);
+        setTimeout(() => {
+          setAction(GitAction.None);
+        }, 100);
+      });
   }
 
   // TODO: add source branch
   const handleAddBranch = () => {
     setAction(GitAction.AddBranch);
   };
-
-  useEffect(() => {
-    getSelectedRepository();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleSelectFile = async () => {
     window.electron.ipcRenderer
@@ -142,7 +175,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.FetchFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
         return null;
       })
       .catch((error) => {
@@ -150,7 +183,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.FetchFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
       });
   };
 
@@ -162,7 +195,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.PullFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
         return null;
       })
       .catch((error) => {
@@ -170,7 +203,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.PullFinished);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
       });
     setAction(GitAction.None);
   };
@@ -183,7 +216,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
         return null;
       })
       .catch((error: Error) => {
@@ -198,14 +231,14 @@ export function GitProvider({ children }: { children: ReactNode }) {
           setAction(GitAction.PushFinshed);
           setTimeout(() => {
             setAction(GitAction.None);
-          }, 500);
+          }, 100);
           return;
         }
         alert(error);
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
           setAction(GitAction.None);
-        }, 500);
+        }, 100);
       });
     setAction(GitAction.None);
   };
@@ -229,14 +262,16 @@ export function GitProvider({ children }: { children: ReactNode }) {
   };
 
   function handleDeleteBranch(branch: string, remote: boolean = false) {
+    setAction(GitAction.DeleteBranch);
     if (window.confirm(`Are you sure you want to delete '${branch}'?`)) {
       window.electron.ipcRenderer
         .invoke('delete-branch', branch, remote)
         .then(() => {
-          console.log('deleted branch');
+          setAction(GitAction.None);
           return null;
         })
         .catch((err) => {
+          setAction(GitAction.None);
           alert(err);
         });
     }
@@ -248,24 +283,41 @@ export function GitProvider({ children }: { children: ReactNode }) {
         name: '',
         path: '',
         branch: '',
+        group: 0,
       };
     }
     return repositories[selectedRepository];
   }
 
   function setSelectedBranch(branch: string) {
+    if (!branch) {
+      return;
+    }
     const branchPath = branch.replace(/^\/(branches|remote)\//, '');
     const newRepos = [...repositories];
-    newRepos[selectedRepository].branch = branch;
+    if (newRepos.length > 0) {
+      newRepos[selectedRepository].branch = branch;
+    }
     window.electron.ipcRenderer
       .invoke('checkout-branch', branchPath)
       .then(() => {
+        setRepositories(newRepos);
+        localStorage.setItem('repositories', JSON.stringify(newRepos));
         return null;
       })
       .catch((err) => alert(err));
-    setRepositories(newRepos);
-    localStorage.setItem('repositories', JSON.stringify(newRepos));
   }
+
+  useEffect(() => {
+    getSelectedRepository();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => handleFetch();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   return (
     <GitContext.Provider
@@ -289,6 +341,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         handleDeleteBranch,
         unstaged,
         setUnstaged,
+        handleMerge,
       }}
     >
       {children}

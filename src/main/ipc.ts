@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { exec } from 'child_process';
 import { dialog, ipcMain, IpcMainInvokeEvent } from 'electron';
-import path from 'path';
+import { writeFileSync, unlinkSync } from 'fs';
+
+const os = require('os');
 
 let selectedRepoPath: string | null = '';
 
@@ -113,14 +114,14 @@ ipcMain.handle(
   ): Promise<void> => {
     if (!selectedRepoPath) throw new Error('No repository selected');
     const { execa } = await initExeca();
-    let string = '';
-    for (let i = 0; i < files.length; i += 1) {
-      string += `${files[i]}${i === files.length - 1 ? '' : ' '}`;
-    }
-    await execa('git', ['add', string], { cwd: selectedRepoPath });
-    await execa('git', ['stash', 'push', '-m', name, string], {
-      cwd: selectedRepoPath,
-    });
+    const resp = await execa(
+      'git',
+      ['stash', 'push', '-u', '-m', name, ...files],
+      {
+        cwd: selectedRepoPath,
+      },
+    );
+    console.log(resp);
   },
 );
 
@@ -164,7 +165,7 @@ ipcMain.handle(
   async (_event: IpcMainInvokeEvent, branchName: string): Promise<void> => {
     if (!selectedRepoPath) throw new Error('No repository selected');
     const { execa } = await initExeca();
-    await execa('git', ['checkout', '-b', branchName], {
+    await execa('git', ['branch', branchName], {
       cwd: selectedRepoPath,
     });
   },
@@ -237,8 +238,19 @@ ipcMain.handle(
   async (_event, sourceBranch: string, targetBranch: string) => {
     if (!selectedRepoPath) throw new Error('No repository selected');
     const { execa } = await initExeca();
+    const { stdio } = await execa('git', ['branch', '--show-current'], {
+      cwd: selectedRepoPath,
+    });
+    await execa('git', ['stash', 'push', '-m', 'pre-merge-stash'], {
+      cwd: selectedRepoPath,
+    });
     await execa('git', ['checkout', targetBranch], { cwd: selectedRepoPath });
     await execa('git', ['merge', sourceBranch], { cwd: selectedRepoPath });
+
+    await execa('git', ['checkout', stdio[1]], { cwd: selectedRepoPath });
+    await execa('git', ['stash', 'pop', 'stash^{/pre-merge-stash}'], {
+      cwd: selectedRepoPath,
+    });
   },
 );
 
@@ -317,5 +329,99 @@ ipcMain.handle(
   },
 );
 
-// local: git branch -D branch_name
-// remote: git push origin --delete branch_name
+ipcMain.handle('get-diff', async (_event, file: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  const { stdout } = await execa('git', ['diff', '--', file], {
+    cwd: selectedRepoPath,
+  });
+  return stdout;
+});
+
+ipcMain.handle('stage-lines', async (_event, file, lineNumbers) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+
+  // Get full diff
+  const { stdout: fullDiff } = await execa(
+    'git',
+    ['diff', '--unified=0', '--', file],
+    {
+      cwd: selectedRepoPath,
+    },
+  );
+
+  // Filter the patch manually based on selected lines
+  const lines = fullDiff.split('\n');
+  const filtered = [];
+  let currentHunk: string[] = [];
+  let keep = false;
+
+  for (const line of lines) {
+    if (line.startsWith('@@')) {
+      const match = line.match(/@@ -(\\d+),?(\\d*) \\+(\\d+),?(\\d*) @@/);
+      const start = match ? parseInt(match[3], 10) : -1;
+      keep = lineNumbers.includes(start);
+      currentHunk = [line];
+    } else if (keep) {
+      currentHunk.push(line);
+    }
+
+    if (
+      keep &&
+      (line.startsWith('+') || line.startsWith('-') || line.trim() === '')
+    ) {
+      filtered.push(...currentHunk);
+      keep = false;
+    }
+  }
+
+  const patch = [
+    `diff --git a/${file} b/${file}`,
+    `index 0000000..0000000 100644`,
+    `--- a/${file}`,
+    `+++ b/${file}`,
+    ...filtered,
+  ].join('\n');
+  const tmp = os.tmpdir();
+  const patchPath = `${tmp}/partial.patch`;
+
+  writeFileSync(patchPath, patch);
+  await execa('git', ['apply', '--cached', patchPath], {
+    cwd: selectedRepoPath,
+  });
+  unlinkSync(patchPath);
+});
+
+ipcMain.handle('discard-file', async (_event, file) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  await execa('git', ['checkout', '--', file], { cwd: selectedRepoPath });
+});
+
+ipcMain.handle('merge', async (_event, branch: string) => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { execa } = await initExeca();
+  await execa('git', ['merge', branch], { cwd: selectedRepoPath });
+});
+
+// git config --get branch.feature/diff-viewer.remote
+ipcMain.handle(
+  'check-remote',
+  async (_event, branch: string): Promise<boolean> => {
+    if (!selectedRepoPath) throw new Error('No repository selected');
+    const { execa } = await initExeca();
+    try {
+      const result = await execa(
+        'git',
+        ['config', '--get', `branch.${branch}.remote`],
+        {
+          cwd: selectedRepoPath,
+        },
+      );
+      return result.stdout[1].length > 0;
+    } catch {
+      return false;
+    }
+  },
+);
