@@ -78,6 +78,9 @@ contextBridge.exposeInMainWorld('authAPI', {
     ipcRenderer.invoke('oauth:github', clientId, account),
   oauthBitbucket: (clientId, account) =>
     ipcRenderer.invoke('oauth:bitbucket', clientId, account),
+  getIdentity: () => ipcRenderer.invoke('git:get-identity'),
+  setIdentity: (name: string, email: string) =>
+    ipcRenderer.invoke('git:set-identity', name, email),
 } as AuthAPI);
 
 declare global {

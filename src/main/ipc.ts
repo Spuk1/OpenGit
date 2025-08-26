@@ -5,6 +5,7 @@ import path from 'path';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
 import { getRemoteInfo, onAuthFactory } from './git-helpers';
+import { getIdentity, setIdentity } from './git-identity';
 
 export let selectedRepoPath: string | null = '';
 
@@ -42,6 +43,18 @@ ipcMain.handle('set-selected-repository', async (_e, repo: string) => {
 ipcMain.handle('get-repo-path', () => {
   assertRepo();
   return selectedRepoPath!;
+});
+
+ipcMain.handle('git:get-identity', async () => {
+  assertRepo();
+  return getIdentity(selectedRepoPath!);
+});
+
+ipcMain.handle('git:set-identity', async (_e, name: string, email: string) => {
+  assertRepo();
+  if (!name || !email) throw new Error('Both name and email are required.');
+  await setIdentity(selectedRepoPath!, name, email);
+  return { ok: true };
 });
 
 /**

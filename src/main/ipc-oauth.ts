@@ -92,7 +92,7 @@ async function oauthGithub(
       client_id: clientId,
       grant_type: 'authorization_code',
       client_secret: CLIENT_SECRET,
-      code: code;
+      code,
       redirect_uri,
       code_verifier: verifier,
     }),

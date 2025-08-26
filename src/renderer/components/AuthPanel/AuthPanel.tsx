@@ -11,6 +11,7 @@ export default function AuthPanel() {
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg>({ text: '', tone: 'hint' });
+  const [id, setId] = useState({ name: '', email: '' });
 
   // Put your real client IDs here or inject via env/config IPC
   const GITHUB_CLIENT_ID = 'Ov23li1TTgR1Gd0z6Kz0';
@@ -22,6 +23,10 @@ export default function AuthPanel() {
   useEffect(() => {
     (async () => {
       try {
+        window.authAPI
+          .getIdentity()
+          .then(setId)
+          .catch((err) => console.error(err));
         const r = await window.authAPI.detectRemote();
         setRemote(r);
         // Probe if we already have a token saved (OAuth)
@@ -42,6 +47,12 @@ export default function AuthPanel() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (id.name !== '' && id.email !== '') {
+      window.authAPI.setIdentity(id.name, id.email);
+    }
+  }, [id]);
 
   async function signInGithub() {
     if (!remote) return;
@@ -155,6 +166,31 @@ export default function AuthPanel() {
           SSH remotes are normalized to HTTPS for isomorphic-git. Only OAuth is
           used (no PAT/app password).
         </p>
+        <div style={grid2}>
+          <div>
+            <label style={label}>Name</label>
+            <input
+              style={input}
+              value={id.name ?? ''}
+              on
+              onChange={(e) => {
+                setId({ ...id, name: e.target.value });
+              }}
+              placeholder="name"
+            />
+          </div>
+          <div>
+            <label style={label}>Email</label>
+            <input
+              style={input}
+              value={id.email ?? ''}
+              onChange={(e) => {
+                setId({ ...id, email: e.target.value });
+              }}
+              placeholder="email"
+            />
+          </div>
+        </div>
       </section>
 
       <section style={box}>
