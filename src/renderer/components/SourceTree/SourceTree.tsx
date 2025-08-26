@@ -86,7 +86,6 @@ const sorter = (treeNodes: TreeNode[]) =>
   );
 
 export default function SourceTree() {
-  const [selected, SetSelected] = useState<Number>(1);
   const [tree, setTree] = useState<TreeNodeGit | undefined>(undefined);
   const [treeExtended, setTreeExtended] = useState<TreeExtendedData>({});
 
@@ -98,6 +97,8 @@ export default function SourceTree() {
     unstaged,
     handleMerge,
     setAction,
+    setSelected,
+    selected
   } = useGit();
   const containerRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -175,9 +176,9 @@ export default function SourceTree() {
     ) => {
       const refs: string = basePath.includes('branches')
         ? await window.electron.ipcRenderer.invoke(
-            'get-branch-revs',
-            branchPath,
-          )
+          'get-branch-revs',
+          branchPath,
+        )
         : '0\t0';
 
       const [behind, ahead] = refs.split('\t').map(Number);
@@ -389,8 +390,8 @@ export default function SourceTree() {
       <div className="ChangesContainer">
         <div
           className="Changes"
-          onClick={() => SetSelected(1)}
-          onKeyDown={() => {}}
+          onClick={() => setSelected(1)}
+          onKeyDown={() => { }}
           role="button"
           tabIndex={0}
           style={{ backgroundColor: selected === 1 ? '#393E46' : '#222831' }}
@@ -405,8 +406,8 @@ export default function SourceTree() {
         </div>
         <div
           className="Changes"
-          onClick={() => SetSelected(2)}
-          onKeyDown={() => {}}
+          onClick={() => setSelected(2)}
+          onKeyDown={() => { }}
           role="button"
           tabIndex={0}
           style={{ backgroundColor: selected === 2 ? '#393E46' : '#222831' }}

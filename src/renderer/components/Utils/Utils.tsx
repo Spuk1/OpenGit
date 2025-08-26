@@ -6,9 +6,10 @@ import {
   GoArchive,
   GoGitBranch,
 } from 'react-icons/go';
-import { LuGitBranchPlus } from 'react-icons/lu';
+import { LuGitBranchPlus, LuGithub } from 'react-icons/lu';
 import { CiFolderOn } from 'react-icons/ci';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import IconButton from '../IconButton/IconButton';
 import './Utils.css';
 import VSpacer from '../VSpacer/VSpacer';
@@ -80,7 +81,7 @@ export default function Utils() {
       });
     setAction(GitAction.None);
   };
-
+  const navigate = useNavigate();
   return (
     <div className="UtilsContainer">
       <VSpacer size={3} />
@@ -104,6 +105,14 @@ export default function Utils() {
         title="Add Branch"
         Icon={LuGitBranchPlus}
         onClick={handleAddBranch}
+      />
+      <VSpacer size={10} />
+      <IconButton
+        title="Settings"
+        Icon={LuGithub}
+        onClick={() => {
+          navigate('/settings');
+        }}
       />
       {action === GitAction.Stash && (
         <Modal>

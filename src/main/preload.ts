@@ -57,4 +57,18 @@ const electronHandler = {
 
 contextBridge.exposeInMainWorld('electron', electronHandler);
 
+contextBridge.exposeInMainWorld('authAPI', {
+  detectRemote: () => ipcRenderer.invoke('auth:detect-remote'),
+  listAccounts: (host: string) =>
+    ipcRenderer.invoke('auth:list-accounts', host),
+  save: (host: string, account: string, token: string) =>
+    ipcRenderer.invoke('auth:save', host, account, token),
+  load: (host: string, account: string) =>
+    ipcRenderer.invoke('auth:load', host, account),
+  del: (host: string, account: string) =>
+    ipcRenderer.invoke('auth:delete', host, account),
+  test: (host: string, account: string) =>
+    ipcRenderer.invoke('auth:test', host, account),
+});
+
 export type ElectronHandler = typeof electronHandler;

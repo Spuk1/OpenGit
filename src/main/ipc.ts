@@ -1,406 +1,558 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+// electron-ipc-isomorphic-git.ts
 import { dialog, ipcMain, IpcMainInvokeEvent } from 'electron';
-import { writeFileSync, unlinkSync } from 'fs';
-
-const os = require('os');
+import fs from 'fs';
+import path from 'path';
+import * as git from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
+import { loadToken, saveToken, deleteToken, listAccounts } from './auth-store';
 
 let selectedRepoPath: string | null = '';
 
-async function initExeca() {
-  return import('execa');
+/**
+ * Helper: assert repo selected
+ */
+function assertRepo() {
+  if (!selectedRepoPath) throw new Error('No repository selected');
 }
 
-export default async function initSSHAgent() {
-  const { execa } = await initExeca();
-  const { stdout } = await execa('eval $(ssh-agent)');
-  return stdout;
+function normalizeRemoteUrl(url: string) {
+  // git@github.com:owner/repo.git -> https://github.com/owner/repo.git
+  const ssh = url.match(/^git@([^:]+):(.+?)(\.git)?$/);
+  if (ssh) return `https://${ssh[1]}/${ssh[2]}.git`;
+  return url;
 }
 
-ipcMain.handle(
-  'add-ssh-keys',
-  async (_event: IpcMainInvokeEvent, keys: string[]): Promise<any> => {
-    const { execa } = await initExeca();
-    keys.forEach((key) => {
-      execa('ssh-add', [key]);
-    });
-  },
-);
+async function getRemoteInfo(dir: string, remote = 'origin') {
+  const url =
+    (await git.getConfig({ fs, dir, path: `remote.${remote}.url` })) ?? '';
+  const httpsUrl = normalizeRemoteUrl(url);
+  const { host } = new URL(httpsUrl); // 'github.com' | 'bitbucket.org' | '<bb-server>'
+  return { url: httpsUrl, host };
+}
 
-ipcMain.handle(
-  'get-branch',
-  async (_event: IpcMainInvokeEvent): Promise<string> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    const { stdout } = await execa('git', ['branch', '--show-current'], {
-      cwd: selectedRepoPath,
-    });
-    return stdout.trim();
-  },
-);
+type Host = 'github.com' | 'bitbucket.org' | string; // include your BB Server host
 
-ipcMain.handle(
-  'open-file-dialog',
-  async (_event: IpcMainInvokeEvent): Promise<string[]> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-    });
+async function onAuthFactory(dir: string, accountHint?: string) {
+  const { url, host } = await getRemoteInfo(dir, 'origin');
 
-    if (result.canceled || result.filePaths.length === 0) return [];
+  return async () => {
+    // Pull credentials from your settings/keychain (account = UI username for BB; 'git' for GH)
+    const account =
+      host === 'github.com'
+        ? accountHint || 'git' // username value is ignored by GitHub
+        : accountHint || process.env.BB_USERNAME || ''; // Bitbucket needs the actual username
 
-    const chosenPath = result.filePaths[0];
+    const token =
+      (await loadToken(host, account)) ||
+      process.env.GITHUB_TOKEN ||
+      process.env.BITBUCKET_TOKEN ||
+      '';
 
-    try {
-      const { execa } = await initExeca();
-      const { stdout } = await execa('git', ['rev-parse', '--show-toplevel'], {
-        cwd: chosenPath,
-      });
-      selectedRepoPath = stdout.trim();
-      return [selectedRepoPath || ''];
-    } catch (error) {
-      throw new Error(
-        `Selected folder is not a Git repository: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+    if (!token) {
+      // For public fetches you can return {}, for pushes you should throw a friendly error
+      return {};
     }
-  },
-);
 
+    // Basic auth that works everywhere:
+    return {
+      username: account,
+      password: token,
+    };
+
+    // Alternatively, OAuth2 style (also supported):
+    // return { oauth2format: host === 'github.com' ? 'github' : 'bitbucket', token };
+  };
+}
+
+const onAuth = async () => {
+  const token = loadToken('github.com', 'git') ?? '';
+  return token ? { username: 'git', password: token } : {};
+};
+
+ipcMain.handle('auth:list-accounts', (_e, host: string) => listAccounts(host));
 ipcMain.handle(
-  'set-selected-repository',
-  async (_event: IpcMainInvokeEvent, repo: string): Promise<void> => {
-    if (!repo) return;
-    selectedRepoPath = repo;
+  'auth:save',
+  (_e, host: string, account: string, token: string) => {
+    saveToken(host, account, token);
   },
 );
-
-ipcMain.handle('fetch', async (_event: IpcMainInvokeEvent): Promise<void> => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['fetch', '-p'], { cwd: selectedRepoPath });
+ipcMain.handle('auth:load', (_e, host: string, account: string) =>
+  loadToken(host, account),
+);
+ipcMain.handle('auth:delete', (_e, host: string, account: string) => {
+  deleteToken(host, account);
 });
 
-ipcMain.handle('pull', async (_event: IpcMainInvokeEvent): Promise<void> => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['pull'], { cwd: selectedRepoPath });
+ipcMain.handle('auth:detect-remote', async () => {
+  ensureRepo();
+  const info = await getRemoteInfo(selectedRepoPath!);
+  return info; // { url, host }
 });
 
-ipcMain.handle(
-  'push',
-  async (_event: IpcMainInvokeEvent, setUpstream: boolean): Promise<void> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    if (setUpstream) {
-      const { stdout } = await execa('git', ['branch', '--show-current'], {
-        cwd: selectedRepoPath,
-      });
-      const branchName = stdout.trim();
-      await execa('git', ['push', '--set-upstream', 'origin', branchName], {
-        cwd: selectedRepoPath,
-      });
-      return;
-    }
-    await execa('git', ['push'], {
-      cwd: selectedRepoPath,
-    });
-  },
-);
+// Quick connectivity check (no push): like `git ls-remote`
+ipcMain.handle('auth:test', async (_e, host: string, account: string) => {
+  ensureRepo();
+  const { url } = await getRemoteInfo(selectedRepoPath!);
+  const onAuth = await (async () => {
+    // Temporarily use provided account/token from vault
+    return async () => {
+      const token = loadToken(host, account) || '';
+      if (!token) return {};
+      return { username: account || 'git', password: token };
+    };
+  })();
 
-ipcMain.handle(
-  'stash',
-  async (
-    _event: IpcMainInvokeEvent,
-    name: string,
-    files: string[],
-  ): Promise<void> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    const resp = await execa(
-      'git',
-      ['stash', 'push', '-u', '-m', name, ...files],
-      {
-        cwd: selectedRepoPath,
-      },
-    );
-    console.log(resp);
-  },
-);
-
-ipcMain.handle(
-  'list-stashes',
-  async (_event: IpcMainInvokeEvent): Promise<any> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    const { stdout } = await execa('git', ['stash', 'list'], {
-      cwd: selectedRepoPath,
-    });
-    return stdout.split('stash@');
-  },
-);
-
-ipcMain.handle(
-  'use-stash',
-  async (_event: IpcMainInvokeEvent, stash: string): Promise<any> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    const { stdout } = await execa('git', ['stash', 'pop', stash], {
-      cwd: selectedRepoPath,
-    });
-    return stdout;
-  },
-);
-
-ipcMain.handle('checkout', async (_event: IpcMainInvokeEvent): Promise<any> => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
   try {
-    const resp = await execa('git', ['checkout'], { cwd: selectedRepoPath });
-    return resp;
-  } catch (error: any) {
-    return error;
+    await git.listServerRefs({ fs, http, url, onAuth });
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
   }
 });
 
-ipcMain.handle(
-  'add-branch',
-  async (_event: IpcMainInvokeEvent, branchName: string): Promise<void> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    await execa('git', ['branch', branchName], {
-      cwd: selectedRepoPath,
-    });
-  },
-);
+/**
+ * Open folder, ensure it's a Git repo (by resolving HEAD)
+ */
+ipcMain.handle('open-file-dialog', async () => {
+  const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+  if (result.canceled || result.filePaths.length === 0) return [];
 
-ipcMain.handle('get-repo-path', () => {
-  if (!selectedRepoPath) throw new Error('No repo selected');
-  return selectedRepoPath;
+  const chosenPath = result.filePaths[0];
+  try {
+    // Will throw if not a repo
+    await git.resolveRef({ fs, dir: chosenPath, ref: 'HEAD' });
+    selectedRepoPath = chosenPath;
+    return [selectedRepoPath];
+  } catch (error: any) {
+    throw new Error(
+      `Selected folder is not a Git repository: ${error?.message ?? 'Unknown error'}`,
+    );
+  }
 });
 
+ipcMain.handle('set-selected-repository', async (_e, repo: string) => {
+  if (repo) selectedRepoPath = repo;
+});
+
+ipcMain.handle('get-repo-path', () => {
+  assertRepo();
+  return selectedRepoPath!;
+});
+
+/**
+ * Current branch
+ */
+ipcMain.handle('get-branch', async () => {
+  assertRepo();
+  const branch = await git.currentBranch({
+    fs,
+    dir: selectedRepoPath!,
+    fullname: false,
+  });
+  return branch ?? '';
+});
+
+ipcMain.handle('fetch', async () => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const { url } = await getRemoteInfo(selectedRepoPath);
+  const onAuth = await onAuthFactory(selectedRepoPath);
+  await git.fetch({
+    fs,
+    http,
+    dir: selectedRepoPath,
+    url,
+    prune: true,
+    onAuth,
+  });
+});
+
+ipcMain.handle('push', async () => {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+  const branch = await git.currentBranch({
+    fs,
+    dir: selectedRepoPath,
+    fullname: false,
+  });
+  if (!branch) throw new Error('No current branch');
+  const { url } = await getRemoteInfo(selectedRepoPath);
+  const onAuth = await onAuthFactory(selectedRepoPath);
+  await git.push({
+    fs,
+    http,
+    dir: selectedRepoPath,
+    url,
+    ref: branch,
+    remoteRef: `refs/heads/${branch}`,
+    onAuth,
+  });
+});
+
+/**
+ * Pull current branch (fast-forward or merge if needed)
+ */
+ipcMain.handle('pull', async () => {
+  assertRepo();
+  const branch = await git.currentBranch({
+    fs,
+    dir: selectedRepoPath!,
+    fullname: false,
+  });
+  if (!branch) throw new Error('No current branch');
+  // Read author from config for merge commits if needed
+  const name =
+    (await git.getConfig({ fs, dir: selectedRepoPath!, path: 'user.name' })) ??
+    'User';
+  const email =
+    (await git.getConfig({ fs, dir: selectedRepoPath!, path: 'user.email' })) ??
+    'user@example.com';
+
+  await git.pull({
+    fs,
+    http,
+    dir: selectedRepoPath!,
+    ref: branch,
+    singleBranch: true,
+    author: { name, email },
+    onAuth,
+  });
+});
+
+/**
+ * Create branch
+ */
+ipcMain.handle('add-branch', async (_e, branchName: string) => {
+  assertRepo();
+  await git.branch({ fs, dir: selectedRepoPath!, ref: branchName });
+});
+
+/**
+ * List branches (local + remote)
+ */
 ipcMain.handle(
   'list-branches',
   async (): Promise<{ local: string[]; remote: string[] }> => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    const { stdout: localOut } = await execa('git', ['branch'], {
-      cwd: selectedRepoPath,
+    assertRepo();
+    const local = await git.listBranches({ fs, dir: selectedRepoPath! });
+    const remote = await git.listBranches({
+      fs,
+      dir: selectedRepoPath!,
+      remote: 'origin',
     });
-    const { stdout: remoteOut } = await execa('git', ['branch', '-r'], {
-      cwd: selectedRepoPath,
-    });
-
-    const local = localOut
-      .split('\n')
-      .map((l) => l.replace(/^[* ]+/, '').trim())
-      .filter(Boolean);
-
-    const remote = remoteOut
-      .split('\n')
-      .map((r: string) => r.trim().replace(/^origin\//, ''))
-      .filter((r: string | string[]) => !r.includes('->'))
-      .filter(Boolean);
-
     return { local, remote };
   },
 );
 
+/**
+ * Branch commit counts (per local branch)
+ */
 ipcMain.handle('get-branch-commits', async () => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  const { stdout } = await execa(
-    'git',
-    ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'],
-    { cwd: selectedRepoPath },
-  );
-  const branches = stdout.split('\n').filter(Boolean);
-  const commitCounts: Record<string, number> = {};
-
-  for (const branchName of branches) {
-    // eslint-disable-next-line no-await-in-loop
-    const { stdout: count } = await execa(
-      'git',
-      ['rev-list', '--count', branchName],
-      { cwd: selectedRepoPath },
-    );
-    commitCounts[branchName] = parseInt(count.trim(), 10);
+  assertRepo();
+  const branches = await git.listBranches({ fs, dir: selectedRepoPath! });
+  const counts: Record<string, number> = {};
+  for (const b of branches) {
+    const logs = await git.log({ fs, dir: selectedRepoPath!, ref: b });
+    counts[b] = logs.length;
   }
-
-  return commitCounts;
+  return counts;
 });
 
-ipcMain.handle('checkout-branch', async (_event, branch: string) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['checkout', branch], { cwd: selectedRepoPath });
+/**
+ * Checkout branch
+ */
+ipcMain.handle('checkout-branch', async (_e, branch: string) => {
+  assertRepo();
+  await git.checkout({ fs, dir: selectedRepoPath!, ref: branch });
 });
 
+/**
+ * Merge branch into target
+ * (No stash here; ensure clean worktree before invoking.)
+ */
 ipcMain.handle(
   'merge-branch',
-  async (_event, sourceBranch: string, targetBranch: string) => {
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    const { stdio } = await execa('git', ['branch', '--show-current'], {
-      cwd: selectedRepoPath,
-    });
-    await execa('git', ['stash', 'push', '-m', 'pre-merge-stash'], {
-      cwd: selectedRepoPath,
-    });
-    await execa('git', ['checkout', targetBranch], { cwd: selectedRepoPath });
-    await execa('git', ['merge', sourceBranch], { cwd: selectedRepoPath });
+  async (_e, sourceBranch: string, targetBranch: string) => {
+    assertRepo();
+    // checkout target, then merge source
+    await git.checkout({ fs, dir: selectedRepoPath!, ref: targetBranch });
+    const name =
+      (await git.getConfig({
+        fs,
+        dir: selectedRepoPath!,
+        path: 'user.name',
+      })) ?? 'User';
+    const email =
+      (await git.getConfig({
+        fs,
+        dir: selectedRepoPath!,
+        path: 'user.email',
+      })) ?? 'user@example.com';
 
-    await execa('git', ['checkout', stdio[1]], { cwd: selectedRepoPath });
-    await execa('git', ['stash', 'pop', 'stash^{/pre-merge-stash}'], {
-      cwd: selectedRepoPath,
+    const result = await git.merge({
+      fs,
+      dir: selectedRepoPath!,
+      ours: targetBranch,
+      theirs: sourceBranch,
+      author: { name, email },
     });
+    return result; // { fastForward, mergeType, oid, ... }
   },
 );
 
+/**
+ * List unstaged changes (files changed in working tree vs index)
+ */
 ipcMain.handle('list-changes', async () => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
+  assertRepo();
+  const matrix = await git.statusMatrix({ fs, dir: selectedRepoPath! });
+  // statusMatrix rows: [filepath, HEAD, WORKDIR, STAGE]
+  // Unstaged = workdir !== stage
+  const unstaged = matrix
+    .filter(([, , workdir, stage]) => workdir !== stage)
+    .map(([filepath]) => filepath);
+  return unstaged;
+});
 
-  const { stdout } = await execa('git', ['status', '--porcelain'], {
-    cwd: selectedRepoPath,
+/**
+ * Stage file
+ */
+ipcMain.handle('stage-file', async (_e, file: string) => {
+  assertRepo();
+  await git.add({ fs, dir: selectedRepoPath!, filepath: file });
+});
+
+/**
+ * Unstage file (requires isomorphic-git with resetIndex)
+ */
+ipcMain.handle('unstage-file', async (_e, file: string) => {
+  assertRepo();
+  // Reset index entry to HEAD version
+  await git.resetIndex({ fs, dir: selectedRepoPath!, filepath: file });
+});
+
+/**
+ * Commit (reads author from config)
+ */
+ipcMain.handle('commit', async (_e, message: string) => {
+  assertRepo();
+  const name =
+    (await git.getConfig({ fs, dir: selectedRepoPath!, path: 'user.name' })) ??
+    'User';
+  const email =
+    (await git.getConfig({ fs, dir: selectedRepoPath!, path: 'user.email' })) ??
+    'user@example.com';
+  const oid = await git.commit({
+    fs,
+    dir: selectedRepoPath!,
+    message,
+    author: { name, email },
   });
-
-  const unstagedFiles = stdout
-    .split('\n')
-    .filter(Boolean)
-    .filter((line) => line[1] !== ' ') // 2nd char = working tree status (unstaged)
-    .map((line) => line.slice(3).trim());
-
-  return unstagedFiles;
+  return oid;
 });
 
-ipcMain.handle('stage-file', async (_event, file: string) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['add', file], { cwd: selectedRepoPath });
+/**
+ * List staged files (index differs from HEAD)
+ */
+ipcMain.handle('list-staged', async () => {
+  assertRepo();
+  const matrix = await git.statusMatrix({ fs, dir: selectedRepoPath! });
+  const staged = matrix
+    // staged changes: STAGE !== HEAD
+    .filter(([, head, , stage]) => head !== stage)
+    .map(([filepath]) => filepath);
+  return staged;
 });
 
-ipcMain.handle('unstage-file', async (_event, file: string) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['reset', 'HEAD', file], { cwd: selectedRepoPath });
-});
-
-ipcMain.handle('commit', async (_event, message: string) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['commit', '-m', message], { cwd: selectedRepoPath });
-});
-
-ipcMain.handle('list-staged', async (_event) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  const { stdout } = await execa('git', ['diff', '--cached', '--name-only'], {
-    cwd: selectedRepoPath,
-  });
-  return stdout.split('\n').filter(Boolean);
-});
-
-ipcMain.handle('get-branch-revs', async (_event, branch: string) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
+/**
+ * Ahead/Behind vs origin/<branch>
+ */
+ipcMain.handle('get-branch-revs', async (_e, branch: string) => {
+  assertRepo();
+  const local = await git.log({ fs, dir: selectedRepoPath!, ref: branch });
+  const remoteRef = `origin/${branch}`;
+  let remote: git.ReadCommitResult[] = [];
   try {
-    const { stdout } = await execa(
-      'git',
-      ['rev-list', '--left-right', '--count', `origin/${branch}...${branch}`],
-      { cwd: selectedRepoPath },
-    );
-    return stdout;
+    remote = await git.log({ fs, dir: selectedRepoPath!, ref: remoteRef });
   } catch {
     return '0 \t0';
   }
+
+  const localSet = new Set(local.map((c) => c.oid));
+  const remoteSet = new Set(remote.map((c) => c.oid));
+  const ahead = local.filter((c) => !remoteSet.has(c.oid)).length;
+  const behind = remote.filter((c) => !localSet.has(c.oid)).length;
+  return `${behind} \t${ahead}`; // mimic `git rev-list --left-right --count origin/branch...branch`
 });
 
+/**
+ * Delete branch (local or remote)
+ */
+ipcMain.handle('delete-branch', async (_e, branch: string, remote: boolean) => {
+  assertRepo();
+  if (remote) {
+    // Remote delete via push refspec ":branch" equivalent
+    // isomorphic-git supports deleting by setting remoteRef and 'delete' option.
+    await git.push({
+      fs,
+      http,
+      dir: selectedRepoPath!,
+      remote: 'origin',
+      remoteRef: `refs/heads/${branch}`,
+      delete: true,
+      onAuth,
+    });
+  } else {
+    await git.deleteBranch({ fs, dir: selectedRepoPath!, ref: branch });
+  }
+});
+
+/**
+ * Diff for a single file (basic)
+ * isomorphic-git has a diff API, but formatting like CLI isn't identical.
+ * Here we return a unified-ish patch using git.diff with base=HEAD vs workdir.
+ */
+ipcMain.handle('get-diff', async (_e, file: string) => {
+  assertRepo();
+  // Simple textual diff:
+  // If you need proper unified format, integrate a diff lib (e.g., 'diff') and compare
+  // HEAD blob vs workdir contents.
+  const dir = selectedRepoPath!;
+  const headOid = await git.resolveRef({ fs, dir, ref: 'HEAD' });
+  let headBlob = '';
+  try {
+    const { blob } = await git.readBlob({
+      fs,
+      dir,
+      oid: headOid,
+      filepath: file,
+    });
+    headBlob = Buffer.from(blob).toString('utf8');
+  } catch {
+    // file may be new
+    headBlob = '';
+  }
+  const workdirPath = path.join(dir, file);
+  const workBlob = fs.existsSync(workdirPath)
+    ? fs.readFileSync(workdirPath, 'utf8')
+    : '';
+
+  // TODO: plug a real diff generator if you need unified patches.
+  // For now return a minimal structure.
+  return JSON.stringify({ filepath: file, head: headBlob, workdir: workBlob });
+});
+
+/**
+ * Discard file changes (restore from HEAD)
+ */
+ipcMain.handle('discard-file', async (_e, file: string) => {
+  assertRepo();
+  await git.checkout({
+    fs,
+    dir: selectedRepoPath!,
+    force: true,
+    filepaths: [file],
+  });
+});
+
+/**
+ * Checkout (no-arg): not meaningful in isomorphic-git; echo current branch
+ */
+ipcMain.handle('checkout', async () => {
+  assertRepo();
+  const branch = await git.currentBranch({
+    fs,
+    dir: selectedRepoPath!,
+    fullname: false,
+  });
+  return { current: branch ?? '' };
+});
+
+/**
+ * Merge current branch with provided branch (same as 'git merge <branch>')
+ */
+ipcMain.handle('merge', async (_e, branch: string) => {
+  assertRepo();
+  const current = await git.currentBranch({
+    fs,
+    dir: selectedRepoPath!,
+    fullname: false,
+  });
+  if (!current) throw new Error('No current branch');
+  const name =
+    (await git.getConfig({ fs, dir: selectedRepoPath!, path: 'user.name' })) ??
+    'User';
+  const email =
+    (await git.getConfig({ fs, dir: selectedRepoPath!, path: 'user.email' })) ??
+    'user@example.com';
+  const result = await git.merge({
+    fs,
+    dir: selectedRepoPath!,
+    ours: current,
+    theirs: branch,
+    author: { name, email },
+  });
+  return result;
+});
+
+// --- Stash helpers ---
+function ensureRepo() {
+  if (!selectedRepoPath) throw new Error('No repository selected');
+}
+function toRefIdx(stashRefOrIdx: string | number): number {
+  if (typeof stashRefOrIdx === 'number') return stashRefOrIdx;
+  const m = /{(\d+)}/.exec(stashRefOrIdx);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// Push working tree + index changes of TRACKED files only
+ipcMain.handle('stash', async (_e: IpcMainInvokeEvent, message: string) => {
+  ensureRepo();
+  await git.stash({
+    fs,
+    dir: selectedRepoPath!,
+    op: 'push',
+    message: message ?? '',
+  });
+});
+
+// List stashes (returns raw list string; we also parse to array)
+ipcMain.handle('list-stashes', async () => {
+  ensureRepo();
+  const raw = (await git.stash({
+    fs,
+    dir: selectedRepoPath!,
+    op: 'list',
+  })) as string;
+  // const list = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  // Example lines usually look like: "stash@{0}: On <branch>: <message>"
+  return raw;
+});
+
+// Apply + keep (like `git stash apply`)
 ipcMain.handle(
-  'delete-branch',
-  async (_event, branch: string, remote: boolean) => {
-    console.log('deleting branch');
-    if (!selectedRepoPath) throw new Error('No repository selected');
-    const { execa } = await initExeca();
-    if (remote) {
-      await execa('git', ['push', 'origin', '--delete', branch], {
-        cwd: selectedRepoPath,
-      });
-      return;
-    }
-    await execa('git', ['branch', '-D', branch], { cwd: selectedRepoPath });
+  'apply-stash',
+  async (_e, stashRefOrIdx: string | number = 0) => {
+    ensureRepo();
+    const refIdx = toRefIdx(stashRefOrIdx);
+    await git.stash({ fs, dir: selectedRepoPath!, op: 'apply', refIdx });
   },
 );
 
-ipcMain.handle('get-diff', async (_event, file: string) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  const { stdout } = await execa('git', ['diff', '--', file], {
-    cwd: selectedRepoPath,
-  });
-  return stdout;
+// Pop + drop (like `git stash pop`)
+ipcMain.handle('use-stash', async (_e, stashRefOrIdx: string | number = 0) => {
+  ensureRepo();
+  const refIdx = toRefIdx(stashRefOrIdx);
+  await git.stash({ fs, dir: selectedRepoPath!, op: 'pop', refIdx });
 });
 
-ipcMain.handle('stage-lines', async (_event, file, lineNumbers) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-
-  // Get full diff
-  const { stdout: fullDiff } = await execa(
-    'git',
-    ['diff', '--unified=0', '--', file],
-    {
-      cwd: selectedRepoPath,
-    },
-  );
-
-  // Filter the patch manually based on selected lines
-  const lines = fullDiff.split('\n');
-  const filtered = [];
-  let currentHunk: string[] = [];
-  let keep = false;
-
-  for (const line of lines) {
-    if (line.startsWith('@@')) {
-      const match = line.match(/@@ -(\\d+),?(\\d*) \\+(\\d+),?(\\d*) @@/);
-      const start = match ? parseInt(match[3], 10) : -1;
-      keep = lineNumbers.includes(start);
-      currentHunk = [line];
-    } else if (keep) {
-      currentHunk.push(line);
-    }
-
-    if (
-      keep &&
-      (line.startsWith('+') || line.startsWith('-') || line.trim() === '')
-    ) {
-      filtered.push(...currentHunk);
-      keep = false;
-    }
-  }
-
-  const patch = [
-    `diff --git a/${file} b/${file}`,
-    `index 0000000..0000000 100644`,
-    `--- a/${file}`,
-    `+++ b/${file}`,
-    ...filtered,
-  ].join('\n');
-  const tmp = os.tmpdir();
-  const patchPath = `${tmp}/partial.patch`;
-
-  writeFileSync(patchPath, patch);
-  await execa('git', ['apply', '--cached', patchPath], {
-    cwd: selectedRepoPath,
-  });
-  unlinkSync(patchPath);
+// Optional: drop a specific entry
+ipcMain.handle('drop-stash', async (_e, stashRefOrIdx: string | number = 0) => {
+  ensureRepo();
+  const refIdx = toRefIdx(stashRefOrIdx);
+  await git.stash({ fs, dir: selectedRepoPath!, op: 'drop', refIdx });
 });
 
-ipcMain.handle('discard-file', async (_event, file) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['checkout', '--', file], { cwd: selectedRepoPath });
-});
-
-ipcMain.handle('merge', async (_event, branch: string) => {
-  if (!selectedRepoPath) throw new Error('No repository selected');
-  const { execa } = await initExeca();
-  await execa('git', ['merge', branch], { cwd: selectedRepoPath });
+// Optional: clear all stashes
+ipcMain.handle('clear-stashes', async () => {
+  ensureRepo();
+  await git.stash({ fs, dir: selectedRepoPath!, op: 'clear' });
 });

@@ -51,6 +51,8 @@ type GitContextType = {
   unstaged: string[];
   setUnstaged: (unstaged: string[]) => void;
   handleMerge: (fromFile: string, toFile: string) => void;
+  setSelected: (value: number) => void;
+  selected: number;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
@@ -60,6 +62,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [action, setAction] = useState<GitAction>(GitAction.None);
   const [unstaged, setUnstaged] = useState<string[]>([]);
+  const [selected, setSelected] = useState<number>(0);
 
   function addRepository(repo: string) {
     if (
@@ -311,14 +314,11 @@ export function GitProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     getSelectedRepository();
+    setTimeout(() => { handleFetch() }, 30000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const onFocus = () => handleFetch();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, []);
+
 
   return (
     <GitContext.Provider
@@ -343,6 +343,8 @@ export function GitProvider({ children }: { children: ReactNode }) {
         unstaged,
         setUnstaged,
         handleMerge,
+        setSelected,
+        selected
       }}
     >
       {children}

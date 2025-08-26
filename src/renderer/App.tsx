@@ -4,6 +4,7 @@ import Utils from './components/Utils/Utils';
 import PanelContainer from './components/Panel/PanelContainer';
 import Tabs from './components/Tabs/Tabs';
 import { GitProvider } from './ContextManager/GitContext';
+import AuthPanel from './components/AuthPanel/AuthPanel';
 
 function Main() {
   return (
@@ -24,6 +25,14 @@ export default function App() {
           element={
             <GitProvider>
               <Main />
+            </GitProvider>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <GitProvider>
+              <AuthPanel />
             </GitProvider>
           }
         />

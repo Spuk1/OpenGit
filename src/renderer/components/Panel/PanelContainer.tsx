@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import SourceTree from '../SourceTree/SourceTree';
 import Commits from '../Commits/Commits';
+import { useGit } from '../../ContextManager/GitContext';
+import CommitPanel from '../Commits/CommitPanel';
 
 export default function PanelContainer() {
   const [Panels, setPanels] = useState<{
@@ -15,15 +17,15 @@ export default function PanelContainer() {
         setPanels(mod);
         return mod;
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   if (!Panels) {
     return null;
-  } // Or a loading spinner if you like
+  }
 
   const { PanelGroup, Panel, PanelResizeHandle } = Panels;
-
+  const { selected } = useGit();
   return (
     <PanelGroup direction="horizontal">
       <Panel id="sourcetree" minSize={10} defaultSize={25} order={1}>
@@ -35,7 +37,14 @@ export default function PanelContainer() {
         />
       </PanelResizeHandle>
       <Panel id="commits" minSize={25} order={2}>
-        <Commits />
+        {
+          selected == 2 &&
+          <Commits />
+        }
+        {
+          selected == 1 &&
+          <CommitPanel />
+        }
       </Panel>
     </PanelGroup>
   );
