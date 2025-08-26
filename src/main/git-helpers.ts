@@ -1,6 +1,6 @@
 import * as git from 'isomorphic-git';
 import fs from 'fs';
-import { load } from './auth-store';
+import { loadToken } from './auth-store';
 
 export function normalizeRemoteUrl(url: string) {
   // git@github.com:owner/repo.git -> https://github.com/owner/repo.git
@@ -22,7 +22,7 @@ export async function onAuthFactory(dir: string, preferredAccount?: string) {
   const { host } = await getRemoteInfo(dir);
   return async () => {
     const account = preferredAccount || (host === 'github.com' ? 'git' : '');
-    const rec = load(host, account);
+    const rec = loadToken(host, account);
     if (!rec?.token) return {};
     if (rec.type === 'oauth') {
       // isomorphic-git OAuth

@@ -96,7 +96,8 @@ ipcMain.handle('push', async () => {
  * Pull current branch (fast-forward or merge if needed)
  */
 ipcMain.handle('pull', async () => {
-  assertRepo();
+  if (!selectedRepoPath) throw new Error('No repository selected');
+
   const branch = await git.currentBranch({
     fs,
     dir: selectedRepoPath!,
@@ -110,10 +111,12 @@ ipcMain.handle('pull', async () => {
   const email =
     (await git.getConfig({ fs, dir: selectedRepoPath!, path: 'user.email' })) ??
     'user@example.com';
-
+  const onAuth = await onAuthFactory(selectedRepoPath);
+  const { url } = await getRemoteInfo(selectedRepoPath);
   await git.pull({
     fs,
     http,
+    url,
     dir: selectedRepoPath!,
     ref: branch,
     singleBranch: true,
