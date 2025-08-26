@@ -1,28 +1,38 @@
-/* eslint-disable no-void */
+/* eslint-disable react/button-has-type */
 // renderer/components/AuthPanel.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 
 type RemoteInfo = { host: string; url: string };
+type Msg = { text: string; tone: 'ok' | 'err' | 'hint' };
 
 export default function AuthPanel() {
   const [remote, setRemote] = useState<RemoteInfo | null>(null);
-  const [accounts, setAccounts] = useState<string[]>([]);
-  const [account, setAccount] = useState('');
-  const [token, setToken] = useState('');
-  const [msg, setMsg] = useState<{ text: string; tone: 'ok' | 'err' | 'hint' }>(
-    { text: '', tone: 'hint' },
-  );
+  const [account, setAccount] = useState(''); // Bitbucket needs username; GH can use 'git'
+  const [connected, setConnected] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<Msg>({ text: '', tone: 'hint' });
 
-  const gh = useMemo(() => remote?.host === 'github.com', [remote]);
+  // Put your real client IDs here or inject via env/config IPC
+  const GITHUB_CLIENT_ID = 'Ov23li1TTgR1Gd0z6Kz0';
+  const BITBUCKET_CLIENT_ID = 'YOUR_BITBUCKET_CLIENT_ID';
+
+  const ghHost = useMemo(() => remote?.host === 'github.com', [remote]);
+  const bbHost = useMemo(() => remote?.host === 'bitbucket.org', [remote]);
 
   useEffect(() => {
     (async () => {
       try {
         const r = await window.authAPI.detectRemote();
         setRemote(r);
-        const list = await window.authAPI.listAccounts(r.host);
-        setAccounts(list);
-        if (r.host === 'github.com' && !account) setAccount('git'); // GH: username placeholder
+        // Probe if we already have a token saved (OAuth)
+        const defaultAccount = r.host === 'github.com' ? 'git' : '';
+        if (!account) setAccount(defaultAccount);
+        const rec = await window.authAPI.load(r.host, defaultAccount);
+        setConnected(!!rec);
+        setMsg({
+          text: rec ? 'Already signed in for this host.' : 'Not signed in yet.',
+          tone: rec ? 'ok' : 'hint',
+        });
       } catch {
         setMsg({
           text: 'Open a repository first. Remote not detected.',
@@ -33,46 +43,79 @@ export default function AuthPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadSaved() {
-    if (!remote?.host || !account)
-      return setMsg({ text: 'Host and account required.', tone: 'err' });
-    const tok = (await window.authAPI.load(remote.host, account)) ?? '';
-    setToken(tok);
-    setMsg({
-      text: tok ? 'Loaded token.' : 'No token saved for this account.',
-      tone: tok ? 'ok' : 'hint',
-    });
+  async function signInGithub() {
+    if (!remote) return;
+    try {
+      setBusy(true);
+      console.log(window.authAPI);
+      await window.authAPI.oauthGithub(GITHUB_CLIENT_ID, 'git');
+      setConnected(true);
+      setMsg({ text: 'GitHub OAuth success.', tone: 'ok' });
+    } catch (e: any) {
+      setMsg({ text: `GitHub OAuth failed: ${e?.message || e}`, tone: 'err' });
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function save() {
-    if (!remote?.host || !account || !token)
-      return setMsg({
-        text: 'Host, account, and token required.',
+  async function signInBitbucket() {
+    if (!remote) return;
+    if (!account)
+      return setMsg({ text: 'Enter your Bitbucket username.', tone: 'err' });
+    try {
+      setBusy(true);
+      await window.authAPI.oauthBitbucket(BITBUCKET_CLIENT_ID, account);
+      setConnected(true);
+      setMsg({ text: 'Bitbucket OAuth success.', tone: 'ok' });
+    } catch (e: any) {
+      setMsg({
+        text: `Bitbucket OAuth failed: ${e?.message || e}`,
         tone: 'err',
       });
-    await window.authAPI.save(remote.host, account, token);
-    setAccounts(await window.authAPI.listAccounts(remote.host));
-    setMsg({ text: 'Saved.', tone: 'ok' });
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function del() {
-    if (!remote?.host || !account)
-      return setMsg({ text: 'Host and account required.', tone: 'err' });
-    await window.authAPI.del(remote.host, account);
-    setToken('');
-    setAccounts(await window.authAPI.listAccounts(remote.host));
-    setMsg({ text: 'Deleted.', tone: 'ok' });
+  async function disconnect() {
+    if (!remote) return;
+    try {
+      setBusy(true);
+      const acc = ghHost ? 'git' : account || '';
+      if (!acc)
+        return setMsg({
+          text: 'No account selected to disconnect.',
+          tone: 'err',
+        });
+      await window.authAPI.del(remote.host, acc);
+      setConnected(false);
+      setMsg({ text: 'Signed out (local token removed).', tone: 'ok' });
+    } catch (e: any) {
+      setMsg({
+        text: `Failed to remove token: ${e?.message || e}`,
+        tone: 'err',
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function test() {
-    if (!remote?.host || !account)
-      return setMsg({ text: 'Host and account required.', tone: 'err' });
-    const r = await window.authAPI.test(remote.host, account);
-    setMsg(
-      r.ok
-        ? { text: '✅ Connection OK (ls-remote succeeded).', tone: 'ok' }
-        : { text: `❌ ${r.error ?? 'Auth failed'}`, tone: 'err' },
-    );
+    if (!remote) return;
+    try {
+      setBusy(true);
+      const acc = ghHost ? 'git' : account || '';
+      if (!acc)
+        return setMsg({ text: 'Enter your account first.', tone: 'err' });
+      const r = await window.authAPI.test(remote.host, acc);
+      setMsg(
+        r.ok
+          ? { text: '✅ Connection OK (ls-remote).', tone: 'ok' }
+          : { text: `❌ ${r.error || 'Auth failed'}`, tone: 'err' },
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -84,7 +127,7 @@ export default function AuthPanel() {
         margin: '0 auto',
       }}
     >
-      <h2 style={{ margin: '8px 0 16px' }}>Remote Authentication</h2>
+      <h2 style={{ margin: '8px 0 16px' }}>Remote Authentication (OAuth)</h2>
 
       <section style={box}>
         <legend style={legend}>Remote</legend>
@@ -95,7 +138,7 @@ export default function AuthPanel() {
               style={input}
               readOnly
               value={remote?.host ?? ''}
-              placeholder="github.com"
+              placeholder="github.com / bitbucket.org"
             />
           </div>
           <div>
@@ -104,102 +147,88 @@ export default function AuthPanel() {
               style={input}
               readOnly
               value={remote?.url ?? ''}
-              placeholder="https://github.com/owner/repo.git"
+              placeholder="https://host/owner/repo.git"
             />
           </div>
         </div>
         <p style={hint}>
-          SSH remotes are normalized to HTTPS for isomorphic-git.
+          SSH remotes are normalized to HTTPS for isomorphic-git. Only OAuth is
+          used (no PAT/app password).
         </p>
       </section>
 
       <section style={box}>
-        <legend style={legend}>Credentials</legend>
-        <div style={grid2}>
-          <div>
-            <label style={label}>
-              Account{' '}
-              {gh ? '(GitHub: use "git")' : '(Bitbucket: your username)'}
-            </label>
+        <legend style={legend}>Sign-in</legend>
+
+        {bbHost && (
+          <>
+            <label style={label}>Bitbucket Username</label>
             <input
               style={input}
               value={account}
               onChange={(e) => setAccount(e.target.value)}
-              placeholder={gh ? 'git' : 'your-username'}
+              placeholder="your-bitbucket-username"
             />
-          </div>
-          <div>
-            <label style={label}>Saved Accounts on Host</label>
-            <select
-              style={input}
-              value=""
-              onChange={(e) => {
-                const val = e.target.value;
-                if (!val) return;
-                setAccount(val);
-                void (async () => {
-                  const tok =
-                    (await window.authAPI.load(remote!.host, val)) ?? '';
-                  setToken(tok);
-                  setMsg({
-                    text: tok
-                      ? 'Loaded token.'
-                      : 'No token saved for this account.',
-                    tone: tok ? 'ok' : 'hint',
-                  });
-                })();
-              }}
-            >
-              <option value="">(none)</option>
-              {accounts.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <label style={label}>Token / App Password</label>
-        <textarea
-          style={{ ...input, height: 96, resize: 'vertical' as const }}
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="Paste your PAT / App Password"
-        />
+          </>
+        )}
 
         <div style={{ ...grid2, marginTop: 10 }}>
-          <button style={btn} onClick={loadSaved}>
-            Load
+          <button
+            style={btn}
+            disabled={busy || !remote || !ghHost}
+            onClick={signInGithub}
+            title="Sign in with GitHub"
+          >
+            Sign in with GitHub
           </button>
-          <button style={btn} onClick={save}>
-            Save
+          <button
+            style={btn}
+            disabled={busy || !remote || !bbHost}
+            onClick={signInBitbucket}
+            title="Sign in with Bitbucket"
+          >
+            Sign in with Bitbucket
           </button>
         </div>
-        <div style={{ ...grid2, marginTop: 10 }}>
-          <button style={btn} onClick={del}>
-            Delete
-          </button>
-          <button style={btn} onClick={test}>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+          <button style={btn} disabled={busy || !remote} onClick={test}>
             Test Connection
           </button>
+          <button
+            style={btn}
+            disabled={busy || !remote || !connected}
+            onClick={disconnect}
+          >
+            Sign out
+          </button>
+          <span
+            style={{
+              ...hintStyle(connected ? 'ok' : 'hint'),
+              alignSelf: 'center',
+            }}
+          >
+            {connected
+              ? 'Connected (token stored securely).'
+              : 'Not connected.'}
+          </span>
         </div>
 
-        <div style={{ ...hintStyle(msg.tone), marginTop: 8 }}>{msg.text}</div>
-
-        <p style={hint}>
-          <b>GitHub</b>: Fine-grained PAT with repo read/write. Username can be{' '}
-          <code>git</code>, password = token.
+        <p style={{ ...hint, marginTop: 8 }}>
+          <b>GitHub:</b> uses OAuth (PKCE). Username is fixed to{' '}
+          <code>git</code> under the hood.
           <br />
-          <b>Bitbucket Cloud</b>: App Password. Username = your Bitbucket
-          username, password = app password.
+          <b>Bitbucket Cloud:</b> uses OAuth (PKCE). Enter your Bitbucket
+          username above.
         </p>
+
+        <div style={{ ...hintStyle(msg.tone), marginTop: 8 }}>{msg.text}</div>
       </section>
     </div>
   );
 }
 
-// inline styles (no CSS deps)
+// inline styles
 const box: React.CSSProperties = {
   border: '1px solid #ddd',
   borderRadius: 8,
@@ -228,7 +257,6 @@ const btn: React.CSSProperties = {
   padding: '8px 12px',
   border: '1px solid #bbb',
   borderRadius: 6,
-  background: '#f8f8f8',
   cursor: 'pointer',
 };
 const hint: React.CSSProperties = { fontSize: 12, color: '#666', marginTop: 6 };

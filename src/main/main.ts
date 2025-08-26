@@ -16,6 +16,7 @@ import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import initSSHAgent from './ipc';
 import './storage';
+import init from './ipc-oauth';
 
 class AppUpdater {
   constructor() {
@@ -125,6 +126,7 @@ app
   .then(() => {
     createWindow();
     initSSHAgent();
+    init();
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.

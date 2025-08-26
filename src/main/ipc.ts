@@ -4,111 +4,16 @@ import fs from 'fs';
 import path from 'path';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
-import { loadToken, saveToken, deleteToken, listAccounts } from './auth-store';
+import { getRemoteInfo, onAuthFactory } from './git-helpers';
 
-let selectedRepoPath: string | null = '';
+export let selectedRepoPath: string | null = '';
 
 /**
  * Helper: assert repo selected
  */
-function assertRepo() {
+export function assertRepo() {
   if (!selectedRepoPath) throw new Error('No repository selected');
 }
-
-function normalizeRemoteUrl(url: string) {
-  // git@github.com:owner/repo.git -> https://github.com/owner/repo.git
-  const ssh = url.match(/^git@([^:]+):(.+?)(\.git)?$/);
-  if (ssh) return `https://${ssh[1]}/${ssh[2]}.git`;
-  return url;
-}
-
-async function getRemoteInfo(dir: string, remote = 'origin') {
-  const url =
-    (await git.getConfig({ fs, dir, path: `remote.${remote}.url` })) ?? '';
-  const httpsUrl = normalizeRemoteUrl(url);
-  const { host } = new URL(httpsUrl); // 'github.com' | 'bitbucket.org' | '<bb-server>'
-  return { url: httpsUrl, host };
-}
-
-type Host = 'github.com' | 'bitbucket.org' | string; // include your BB Server host
-
-async function onAuthFactory(dir: string, accountHint?: string) {
-  const { url, host } = await getRemoteInfo(dir, 'origin');
-
-  return async () => {
-    // Pull credentials from your settings/keychain (account = UI username for BB; 'git' for GH)
-    const account =
-      host === 'github.com'
-        ? accountHint || 'git' // username value is ignored by GitHub
-        : accountHint || process.env.BB_USERNAME || ''; // Bitbucket needs the actual username
-
-    const token =
-      (await loadToken(host, account)) ||
-      process.env.GITHUB_TOKEN ||
-      process.env.BITBUCKET_TOKEN ||
-      '';
-
-    if (!token) {
-      // For public fetches you can return {}, for pushes you should throw a friendly error
-      return {};
-    }
-
-    // Basic auth that works everywhere:
-    return {
-      username: account,
-      password: token,
-    };
-
-    // Alternatively, OAuth2 style (also supported):
-    // return { oauth2format: host === 'github.com' ? 'github' : 'bitbucket', token };
-  };
-}
-
-const onAuth = async () => {
-  const token = loadToken('github.com', 'git') ?? '';
-  return token ? { username: 'git', password: token } : {};
-};
-
-ipcMain.handle('auth:list-accounts', (_e, host: string) => listAccounts(host));
-ipcMain.handle(
-  'auth:save',
-  (_e, host: string, account: string, token: string) => {
-    saveToken(host, account, token);
-  },
-);
-ipcMain.handle('auth:load', (_e, host: string, account: string) =>
-  loadToken(host, account),
-);
-ipcMain.handle('auth:delete', (_e, host: string, account: string) => {
-  deleteToken(host, account);
-});
-
-ipcMain.handle('auth:detect-remote', async () => {
-  ensureRepo();
-  const info = await getRemoteInfo(selectedRepoPath!);
-  return info; // { url, host }
-});
-
-// Quick connectivity check (no push): like `git ls-remote`
-ipcMain.handle('auth:test', async (_e, host: string, account: string) => {
-  ensureRepo();
-  const { url } = await getRemoteInfo(selectedRepoPath!);
-  const onAuth = await (async () => {
-    // Temporarily use provided account/token from vault
-    return async () => {
-      const token = loadToken(host, account) || '';
-      if (!token) return {};
-      return { username: account || 'git', password: token };
-    };
-  })();
-
-  try {
-    await git.listServerRefs({ fs, http, url, onAuth });
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || String(e) };
-  }
-});
 
 /**
  * Open folder, ensure it's a Git repo (by resolving HEAD)
