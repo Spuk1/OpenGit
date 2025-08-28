@@ -41,7 +41,7 @@ export default function ContextMenu({
         break;
       case 'Fast-Forward':
         // window.electron.ipcRenderer.invoke('fast-forward', branch);
-        toast.error('Coming soon!');
+        toast.success('Coming soon!');
         break;
       case 'Pull':
         handlePull();
@@ -50,7 +50,7 @@ export default function ContextMenu({
         handlePush();
         break;
       case 'Create PR':
-        toast('Coming soon!');
+        toast.success('Coming soon!');
         // window.electron.ipcRenderer.invoke('create-pr', branch);
         break;
       case 'New Branch':
@@ -58,7 +58,7 @@ export default function ContextMenu({
         // window.electron.ipcRenderer.invoke('new-branch', branch);
         break;
       case 'Rename':
-        toast('Coming soon!');
+        toast.success('Coming soon!');
         // window.electron.ipcRenderer.invoke('rename', branch);
         break;
       case 'Delete':
