@@ -16,7 +16,7 @@ export default function AuthPanel() {
 
   // Put your real client IDs here or inject via env/config IPC
   const GITHUB_CLIENT_ID = 'Ov23li1TTgR1Gd0z6Kz0';
-  const BITBUCKET_CLIENT_ID = 'YOUR_BITBUCKET_CLIENT_ID';
+  const BITBUCKET_CLIENT_ID = 'tahK9D9DZHATRZkYGk';
 
   const ghHost = useMemo(() => remote?.host === 'github.com', [remote]);
   const bbHost = useMemo(() => remote?.host === 'bitbucket.org', [remote]);
@@ -228,7 +228,6 @@ export default function AuthPanel() {
         <div style={{ ...grid2, marginTop: 10 }}>
           <button
             style={btn}
-            disabled={busy || !remote || !ghHost}
             onClick={signInGithub}
             title="Sign in with GitHub"
           >
@@ -236,7 +235,6 @@ export default function AuthPanel() {
           </button>
           <button
             style={btn}
-            disabled={busy || !remote || !bbHost}
             onClick={signInBitbucket}
             title="Sign in with Bitbucket"
           >

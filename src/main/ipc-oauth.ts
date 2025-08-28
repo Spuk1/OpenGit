@@ -9,7 +9,8 @@ import { getRemoteInfo } from './git-helpers';
 import { selectedRepoPath } from './ipc';
 import { loadToken, deleteToken, saveOAuth } from './auth-store';
 
-const CLIENT_SECRET = '7d6aa75590a52403efd84bcbacc30db209ed522f';
+const CLIENT_GITHUB_SECRET = '7d6aa75590a52403efd84bcbacc30db209ed522f';
+const CLIENT_BITBUCKET_SECRET = 'CGPN5JAtxVcwwJFcBhGjP9XULn52FmDY'
 
 export default function init() {}
 
@@ -91,7 +92,7 @@ async function oauthGithub(
     body: JSON.stringify({
       client_id: clientId,
       grant_type: 'authorization_code',
-      client_secret: CLIENT_SECRET,
+      client_secret: CLIENT_GITHUB_SECRET,
       code,
       redirect_uri,
       code_verifier: verifier,
@@ -133,8 +134,10 @@ async function oauthBitbucket(
 
   const form = new URLSearchParams({
     grant_type: 'authorization_code',
+    client_id: clientId,
     code,
     redirect_uri,
+    client_secret: CLIENT_BITBUCKET_SECRET,
     code_verifier: verifier,
   });
   const resp = await fetch('https://bitbucket.org/site/oauth2/access_token', {
