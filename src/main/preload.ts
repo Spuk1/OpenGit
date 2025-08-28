@@ -30,7 +30,9 @@ export type Channels =
   | 'discard-lines'
   | 'get-repositories'
   | 'merge-branch'
+  | 'get-commit-log'
   | 'save-repositories';
+
 
 const electronHandler = {
   ipcRenderer: {

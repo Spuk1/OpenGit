@@ -512,3 +512,9 @@ ipcMain.handle('clear-stashes', async () => {
   ensureRepo();
   await git.stash({ fs, dir: selectedRepoPath!, op: 'clear' });
 });
+
+ipcMain.handle('get-commit-log', async ()=> {
+  ensureRepo();
+  const log = await git.log({ fs, dir: selectedRepoPath!});
+  return log;
+})
