@@ -10,6 +10,7 @@ import { LuGitBranchPlus, LuGithub } from 'react-icons/lu';
 import { CiFolderOn } from 'react-icons/ci';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import IconButton from '../IconButton/IconButton';
 import './Utils.css';
 import VSpacer from '../VSpacer/VSpacer';
@@ -55,7 +56,7 @@ export default function Utils() {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast(error);
         setAction(GitAction.StashFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -66,7 +67,7 @@ export default function Utils() {
 
   const addBranch = () => {
     if (newBranchName.length === 0) {
-      alert('Please enter a branch name');
+      toast('Please enter a branch name');
       return;
     }
     window.electron.ipcRenderer
@@ -76,7 +77,7 @@ export default function Utils() {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast(error);
         setAction(GitAction.None);
       });
     setAction(GitAction.None);

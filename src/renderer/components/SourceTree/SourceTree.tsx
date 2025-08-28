@@ -22,6 +22,7 @@ import '@sinm/react-file-tree/icons.css';
 import { IconType } from 'react-icons';
 import { IoCloudOfflineOutline } from 'react-icons/io5';
 
+import toast from 'react-hot-toast';
 import Divider from '../Divider/Divider';
 import { GitAction, useGit } from '../../ContextManager/GitContext';
 import ContextMenu from '../ContextMenu/ContextMenu';
@@ -306,7 +307,7 @@ export default function SourceTree() {
         })
         .catch((err) => {
           // eslint-disable-next-line no-alert
-          alert(err);
+          toast(err);
         });
     }
   };

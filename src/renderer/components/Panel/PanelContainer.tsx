@@ -38,8 +38,8 @@ export default function PanelContainer() {
         />
       </PanelResizeHandle>
       <Panel id="commits" minSize={25} order={2}>
-        {selected == 2 && <Commits />}
-        {selected == 1 && <CommitPanel />}
+        {selected === 2 && <Commits />}
+        {selected === 1 && <CommitPanel />}
       </Panel>
     </PanelGroup>
   );
