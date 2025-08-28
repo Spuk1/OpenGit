@@ -212,8 +212,8 @@ ipcMain.handle(
     const result = await git.merge({
       fs,
       dir: selectedRepoPath!,
-      ours: targetBranch,
-      theirs: sourceBranch,
+      ours: sourceBranch,
+      theirs: targetBranch,
       author: { name, email },
     });
     return result; // { fastForward, mergeType, oid, ... }
