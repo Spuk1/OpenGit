@@ -1,6 +1,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { ReactElement, useEffect, useRef, useState } from 'react';
 import './SourceTree.css';
+import { confirmAlert } from 'react-confirm-alert';
+import 'react-confirm-alert/src/react-confirm-alert.css';
 import {
   GoLog,
   GoQuote,
@@ -289,27 +291,39 @@ export default function SourceTree() {
       );
       setTree(treeData);
     } catch (err) {
-      console.error('Failed to load branches or stashes', err);
+      toast.error('Failed to load branches or stashes');
     }
   };
 
   const openStashModal = (stash: string) => {
-    // eslint-disable-next-line no-alert, no-restricted-globals
-    if (confirm(`Do you want to use stash ${stash}?`)) {
-      setAction(GitAction.Pop);
-      const st: string = `stash@${stash.split(':')[0]}`;
-      window.electron.ipcRenderer
-        .invoke('use-stash', st)
-        .then((resp) => {
-          setAction(GitAction.None);
-          refreshBranches();
-          return resp;
-        })
-        .catch((err) => {
-          // eslint-disable-next-line no-alert
-          toast.error(err);
-        });
-    }
+    confirmAlert({
+      title: 'Apply Stash?',
+      message: 'This will delete and apply the stash',
+      buttons: [
+        {
+          label: 'Yes',
+          onClick: async () => {
+            setAction(GitAction.Pop);
+            const st: string = `stash@${stash.split(':')[0]}`;
+            window.electron.ipcRenderer
+              .invoke('use-stash', st)
+              .then((resp) => {
+                setAction(GitAction.None);
+                refreshBranches();
+                return resp;
+              })
+              .catch((err) => {
+                // eslint-disable-next-line no-alert
+                toast.error(err);
+              });
+          },
+        },
+        {
+          label: 'No',
+          onClick: () => {},
+        },
+      ],
+    });
   };
 
   const toggleExpanded: FileTreeProps['onItemClick'] = async (

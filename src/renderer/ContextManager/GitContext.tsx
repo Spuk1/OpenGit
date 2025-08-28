@@ -8,6 +8,8 @@ import {
   useEffect,
 } from 'react';
 import toast from 'react-hot-toast';
+import { confirmAlert } from 'react-confirm-alert';
+import 'react-confirm-alert/src/react-confirm-alert.css';
 
 export enum GitAction {
   Commit = 'comitting',
@@ -226,20 +228,29 @@ export function GitProvider({ children }: { children: ReactNode }) {
       })
       .catch((error: Error) => {
         if (error.message.includes('--set-upstream')) {
-          if (
-            window.confirm(
-              'Do you want to set upstream? (git push --set-upstream origin <branch>)',
-            )
-          ) {
-            handlePush(true);
-          }
+          confirmAlert({
+            title: 'Set Upstream?',
+            message: 'This will create a new remote',
+            buttons: [
+              {
+                label: 'Yes',
+                onClick: async () => {
+                  handlePush(true);
+                },
+              },
+              {
+                label: 'No',
+                onClick: () => {},
+              },
+            ],
+          });
           setAction(GitAction.PushFinshed);
           setTimeout(() => {
             setAction(GitAction.None);
           }, 100);
           return;
         }
-        toast.error(error);
+        toast.error(String(error));
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
           setAction(GitAction.None);

@@ -110,6 +110,7 @@
     "execa": "^9.6.0",
     "isomorphic-git": "^1.33.0",
     "react": "^19.0.0",
+    "react-confirm-alert": "^3.0.6",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",

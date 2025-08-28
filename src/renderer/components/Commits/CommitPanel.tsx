@@ -2,6 +2,9 @@
 import { useEffect, useState } from 'react';
 import './CommitPanel.css';
 import MonacoEditor, { monaco } from 'react-monaco-editor';
+import { confirmAlert } from 'react-confirm-alert';
+import 'react-confirm-alert/src/react-confirm-alert.css';
+import toast from 'react-hot-toast';
 import { GitAction, useGit } from '../../ContextManager/GitContext';
 
 export default function CommitPanel() {
@@ -32,7 +35,7 @@ export default function CommitPanel() {
         loadDiff(selectedUnstaged);
       }
     } catch (err) {
-      console.error('Failed to load changes', err);
+      toast.error('Failed to load changes');
     }
   };
 
@@ -49,7 +52,7 @@ export default function CommitPanel() {
       setSelectedLines(new Set());
       await loadChanges();
     } catch (err) {
-      console.error('Failed to stage lines', err);
+      toast.error('Failed to stage lines');
     }
   };
 
@@ -59,7 +62,7 @@ export default function CommitPanel() {
       setSelectedLines(new Set());
       await loadChanges();
     } catch (err) {
-      console.error('Failed to stage file', err);
+      toast.error('Failed to stage file');
     }
   };
 
@@ -76,7 +79,7 @@ export default function CommitPanel() {
       setSelectedLines(new Set());
       await loadChanges();
     } catch (err) {
-      console.error('Failed to discard lines', err);
+      toast.error('Failed to discard lines');
     }
   };
 
@@ -85,18 +88,32 @@ export default function CommitPanel() {
       await window.electron.ipcRenderer.invoke('unstage-file', file);
       await loadChanges();
     } catch (err) {
-      console.error('Failed to unstage file', err);
+      toast.error('Failed to unstage file');
     }
   };
 
   const discardFile = async (file: string) => {
-    if (!window.confirm(`Discard all changes in ${file}?`)) return;
-    try {
-      await window.electron.ipcRenderer.invoke('discard-file', file);
-      await loadChanges();
-    } catch (err) {
-      console.error('Failed to discard file', err);
-    }
+    confirmAlert({
+      title: 'Confirm to discard',
+      message: 'This will delete all changes to this file.',
+      buttons: [
+        {
+          label: 'Yes',
+          onClick: async () => {
+            try {
+              await window.electron.ipcRenderer.invoke('discard-file', file);
+              await loadChanges();
+            } catch (err) {
+              toast.error(`Failed to discard file ${err}`);
+            }
+          },
+        },
+        {
+          label: 'No',
+          onClick: () => {},
+        },
+      ],
+    });
   };
 
   const handleCommit = async () => {
@@ -111,7 +128,7 @@ export default function CommitPanel() {
       }
       await loadChanges();
     } catch (err) {
-      console.error('Failed to commit', err);
+      toast.error('Failed to commit');
     }
   };
 
@@ -123,7 +140,7 @@ export default function CommitPanel() {
       });
       setDiffText(result.patch);
     } catch (err) {
-      console.error('Failed to get diff', err);
+      toast.error('Failed to get diff');
     }
   };
 
