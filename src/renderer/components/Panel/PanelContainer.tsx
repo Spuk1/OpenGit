@@ -5,6 +5,7 @@ import { useGit } from '../../ContextManager/GitContext';
 import CommitPanel from '../Commits/CommitPanel';
 
 export default function PanelContainer() {
+  const { selected } = useGit();
   const [Panels, setPanels] = useState<{
     Panel: any;
     PanelGroup: any;
@@ -17,7 +18,7 @@ export default function PanelContainer() {
         setPanels(mod);
         return mod;
       })
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   if (!Panels) {
@@ -25,7 +26,7 @@ export default function PanelContainer() {
   }
 
   const { PanelGroup, Panel, PanelResizeHandle } = Panels;
-  const { selected } = useGit();
+
   return (
     <PanelGroup direction="horizontal">
       <Panel id="sourcetree" minSize={10} defaultSize={25} order={1}>
@@ -37,14 +38,8 @@ export default function PanelContainer() {
         />
       </PanelResizeHandle>
       <Panel id="commits" minSize={25} order={2}>
-        {
-          selected == 2 &&
-          <Commits />
-        }
-        {
-          selected == 1 &&
-          <CommitPanel />
-        }
+        {selected == 2 && <Commits />}
+        {selected == 1 && <CommitPanel />}
       </Panel>
     </PanelGroup>
   );

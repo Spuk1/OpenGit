@@ -98,7 +98,7 @@ export default function SourceTree() {
     handleMerge,
     setAction,
     setSelected,
-    selected
+    selected,
   } = useGit();
   const containerRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -176,9 +176,9 @@ export default function SourceTree() {
     ) => {
       const refs: string = basePath.includes('branches')
         ? await window.electron.ipcRenderer.invoke(
-          'get-branch-revs',
-          branchPath,
-        )
+            'get-branch-revs',
+            branchPath,
+          )
         : '0\t0';
 
       const [behind, ahead] = refs.split('\t').map(Number);
@@ -391,7 +391,7 @@ export default function SourceTree() {
         <div
           className="Changes"
           onClick={() => setSelected(1)}
-          onKeyDown={() => { }}
+          onKeyDown={() => {}}
           role="button"
           tabIndex={0}
           style={{ backgroundColor: selected === 1 ? '#393E46' : '#222831' }}
@@ -407,7 +407,7 @@ export default function SourceTree() {
         <div
           className="Changes"
           onClick={() => setSelected(2)}
-          onKeyDown={() => { }}
+          onKeyDown={() => {}}
           role="button"
           tabIndex={0}
           style={{ backgroundColor: selected === 2 ? '#393E46' : '#222831' }}
