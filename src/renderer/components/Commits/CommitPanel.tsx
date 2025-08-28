@@ -121,7 +121,6 @@ export default function CommitPanel() {
       const result = await window.electron.ipcRenderer.invoke('get-diff', {
         filepath: file,
       });
-      console.log(result.patch);
       setDiffText(result.patch);
     } catch (err) {
       console.error('Failed to get diff', err);
