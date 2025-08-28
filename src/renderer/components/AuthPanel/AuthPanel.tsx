@@ -1,6 +1,7 @@
 /* eslint-disable react/button-has-type */
 // renderer/components/AuthPanel.tsx
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 type RemoteInfo = { host: string; url: string };
 type Msg = { text: string; tone: 'ok' | 'err' | 'hint' };
@@ -128,7 +129,7 @@ export default function AuthPanel() {
       setBusy(false);
     }
   }
-
+  const navigate = useNavigate();
   return (
     <div
       style={{
@@ -138,7 +139,23 @@ export default function AuthPanel() {
         margin: '0 auto',
       }}
     >
-      <h2 style={{ margin: '8px 0 16px' }}>Remote Authentication (OAuth)</h2>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <h2 style={{ margin: '8px 0 16px' }}>Remote Authentication (OAuth)</h2>
+        <button
+          style={{ padding: 2, fontSize: '0.9rem', backgroundColor: 'red' }}
+          onClick={() => {
+            navigate('/');
+          }}
+        >
+          close
+        </button>
+      </div>
 
       <section style={box}>
         <legend style={legend}>Remote</legend>

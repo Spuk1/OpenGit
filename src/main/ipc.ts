@@ -4,8 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
-import { getRemoteInfo, onAuthFactory } from './git-helpers';
+import { discoverPaths, getRemoteInfo, isBinary, listPaths, onAuthFactory, readSpec, TreeSpec } from './git-helpers';
 import { getIdentity, setIdentity } from './git-identity';
+import { createTwoFilesPatch } from 'diff';
 
 export let selectedRepoPath: string | null = '';
 
@@ -326,40 +327,74 @@ ipcMain.handle('delete-branch', async (_e, branch: string, remote: boolean) => {
   }
 });
 
-/**
- * Diff for a single file (basic)
- * isomorphic-git has a diff API, but formatting like CLI isn't identical.
- * Here we return a unified-ish patch using git.diff with base=HEAD vs workdir.
- */
-ipcMain.handle('get-diff', async (_e, file: string) => {
-  assertRepo();
-  // Simple textual diff:
-  // If you need proper unified format, integrate a diff lib (e.g., 'diff') and compare
-  // HEAD blob vs workdir contents.
-  const dir = selectedRepoPath!;
-  const headOid = await git.resolveRef({ fs, dir, ref: 'HEAD' });
-  let headBlob = '';
+const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+ipcMain.handle('get-diff', async (_e, args: {
+  filepath: string;
+  base?: TreeSpec;
+  target?: TreeSpec;
+  context?: number;
+}) => {
   try {
-    const { blob } = await git.readBlob({
-      fs,
-      dir,
-      oid: headOid,
-      filepath: file,
-    });
-    headBlob = Buffer.from(blob).toString('utf8');
-  } catch {
-    // file may be new
-    headBlob = '';
-  }
-  const workdirPath = path.join(dir, file);
-  const workBlob = fs.existsSync(workdirPath)
-    ? fs.readFileSync(workdirPath, 'utf8')
-    : '';
+    assertRepo();
+    const dir = selectedRepoPath!;
+    const filepath = args.filepath.replace(/^[./]+/, ''); // normalize
+    if (!filepath || filepath.startsWith('.git/')) {
+      throw new Error('Invalid filepath');
+    }
 
-  // TODO: plug a real diff generator if you need unified patches.
-  // For now return a minimal structure.
-  return JSON.stringify({ filepath: file, head: headBlob, workdir: workBlob });
+    const base   = args.base   ?? 'HEAD';
+    const target = args.target ?? 'WORKDIR';
+    const context = args.context ?? 3;
+
+    const [oldBuf, newBuf] = await Promise.all([
+      readSpec(dir, base, filepath),
+      readSpec(dir, target, filepath),
+    ]);
+
+    // same content? (no changes)
+    if (oldBuf && newBuf && oldBuf.length === newBuf.length && Buffer.compare(oldBuf, newBuf) === 0) {
+      return { ok: true, filepath, base, target, patch: '' };
+    }
+
+    const candidate = newBuf ?? oldBuf;
+    if ((candidate?.length ?? 0) > MAX_TEXT_BYTES) {
+      return {
+        ok: true, filepath, base, target,
+        skipped: true, reason: 'too_large',
+        patch: `diff --git a/${filepath} b/${filepath}\n# file too large to diff (${candidate!.length} bytes)\n`,
+      };
+    }
+
+    if (isBinary(oldBuf) || isBinary(newBuf)) {
+      return {
+        ok: true, filepath, base, target, binary: true,
+        patch: `diff --git a/${filepath} b/${filepath}\nBinary files differ\n`,
+      };
+    }
+
+    const oldText = oldBuf ? Buffer.from(oldBuf).toString('utf8') : '';
+    const newText = newBuf ? Buffer.from(newBuf).toString('utf8') : '';
+
+    const patch = createTwoFilesPatch(
+      `a/${filepath}`, `b/${filepath}`,
+      oldText, newText,
+      String(base), String(target),
+      { context }
+    );
+
+    return { ok: true, filepath, base, target, patch };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
 });
+
+// ipcMain.handle('get-diff', async (_e, file: string) => {
+//   const { patches } = await (ipcMain as any).invoke
+//     ? await (global as any).electronIpcCall?.('git:diff', { filepath: file }) // in case you have a helper
+//     : await (async () => await (ipcMain as any).handlers.get('git:diff')!({} as any, { filepath: file }))();
+//   return patches?.[0]?.patch ?? '';
+// });
+
 
 /**
  * Discard file changes (restore from HEAD)
