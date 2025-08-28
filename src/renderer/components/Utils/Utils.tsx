@@ -56,7 +56,7 @@ export default function Utils() {
         return null;
       })
       .catch((error) => {
-        toast(error);
+        toast.error(error);
         setAction(GitAction.StashFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -67,7 +67,7 @@ export default function Utils() {
 
   const addBranch = () => {
     if (newBranchName.length === 0) {
-      toast('Please enter a branch name');
+      toast.error('Please enter a branch name');
       return;
     }
     window.electron.ipcRenderer
@@ -77,7 +77,7 @@ export default function Utils() {
         return null;
       })
       .catch((error) => {
-        toast(error);
+        toast.error(error);
         setAction(GitAction.None);
       });
     setAction(GitAction.None);

@@ -145,7 +145,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        toast(error);
+        toast.error(error);
         setAction(GitAction.CommitFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -168,7 +168,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         }
         return null;
       })
-      .catch(() => toast('Directory is not a valid git repository!'));
+      .catch(() => toast.error('Directory is not a valid git repository!'));
   };
 
   const handleFetch = () => {
@@ -184,7 +184,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        toast(error);
+        toast.error(error);
         setAction(GitAction.FetchFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -204,7 +204,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        toast(error);
+        toast.error(error);
         setAction(GitAction.PullFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -239,7 +239,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
           }, 100);
           return;
         }
-        toast(error);
+        toast.error(error);
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -260,7 +260,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        toast(error);
+        toast.error(error);
       });
 
     setAction(GitAction.Stash);
@@ -277,7 +277,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         })
         .catch((err) => {
           setAction(GitAction.None);
-          toast(err);
+          toast.error(err);
         });
     }
   }
@@ -310,7 +310,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('repositories', JSON.stringify(newRepos));
         return null;
       })
-      .catch((err) => toast(err));
+      .catch((err) => toast.error(err));
   }
 
   useEffect(() => {

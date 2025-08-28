@@ -307,7 +307,7 @@ export default function SourceTree() {
         })
         .catch((err) => {
           // eslint-disable-next-line no-alert
-          toast(err);
+          toast.error(err);
         });
     }
   };
