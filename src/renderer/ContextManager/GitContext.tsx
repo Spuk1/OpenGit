@@ -62,7 +62,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [action, setAction] = useState<GitAction>(GitAction.None);
   const [unstaged, setUnstaged] = useState<string[]>([]);
-  const [selected, setSelected] = useState<number>(0);
+  const [selected, setSelected] = useState<number>(1);
 
   function addRepository(repo: string) {
     if (
@@ -314,11 +314,11 @@ export function GitProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     getSelectedRepository();
-    setTimeout(() => { handleFetch() }, 30000);
+    setTimeout(() => {
+      handleFetch();
+    }, 30000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-
 
   return (
     <GitContext.Provider
@@ -344,7 +344,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         setUnstaged,
         handleMerge,
         setSelected,
-        selected
+        selected,
       }}
     >
       {children}
