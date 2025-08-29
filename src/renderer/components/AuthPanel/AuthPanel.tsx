@@ -72,8 +72,8 @@ export default function AuthPanel() {
 
   async function signInBitbucket() {
     if (!remote) return;
-    if (!account)
-      return setMsg({ text: 'Enter your Bitbucket username.', tone: 'err' });
+    // if (!account)
+    //   return setMsg({ text: 'Enter your Bitbucket username.', tone: 'err' });
     try {
       setBusy(true);
       await window.authAPI.oauthBitbucket(BITBUCKET_CLIENT_ID, account);
@@ -117,8 +117,7 @@ export default function AuthPanel() {
     try {
       setBusy(true);
       const acc = ghHost ? 'git' : account || '';
-      if (!acc)
-        return setMsg({ text: 'Enter your account first.', tone: 'err' });
+      
       const r = await window.authAPI.test(remote.host, acc);
       setMsg(
         r.ok
@@ -189,7 +188,6 @@ export default function AuthPanel() {
             <input
               style={input}
               value={id.name ?? ''}
-              on
               onChange={(e) => {
                 setId({ ...id, name: e.target.value });
               }}

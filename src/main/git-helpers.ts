@@ -13,6 +13,7 @@ export function normalizeRemoteUrl(url: string) {
 export async function getRemoteInfo(dir: string, remote = 'origin') {
   const url =
     (await git.getConfig({ fs, dir, path: `remote.${remote}.url` })) ?? '';
+  console.log(url)
   const httpsUrl = normalizeRemoteUrl(url);
   const { host } = new URL(httpsUrl); // 'github.com' | 'bitbucket.org' | '<bb-server>'
   return { url: httpsUrl, host };
@@ -24,6 +25,7 @@ export async function onAuthFactory(dir: string, preferredAccount?: string) {
   return async () => {
     const account = preferredAccount || (host === 'github.com' ? 'git' : '');
     const rec = loadToken(host, account);
+    console.log(rec)
     if (!rec?.token) return {};
     if (rec.type === 'oauth') {
       // isomorphic-git OAuth
@@ -116,4 +118,22 @@ export async function listPaths(dir: string, base: TreeSpec, target: TreeSpec, o
     },
   });
   return (out as string[]).filter(Boolean);
+}
+
+export function getSubmodulePaths(dir: string): string[] {
+  const gm = path.join(dir, '.gitmodules');
+  if (!fs.existsSync(gm)) return [];
+  const text = fs.readFileSync(gm, 'utf8');
+  // naive parser is fine here; looks for "path = foo/bar"
+  const paths: string[] = [];
+  for (const m of text.matchAll(/^\s*path\s*=\s*(.+)\s*$/gm)) {
+    const p = m[1].trim().replace(/^\.\/+/, ''); // normalize
+    if (p) paths.push(p);
+  }
+  return paths;
+}
+
+export function insideAnySubmodule(fp: string, submods: string[]) {
+  // inside if it startsWith "<path>/" (strictly deeper than the root)
+  return submods.some((p) => fp !== p && (fp.startsWith(p + '/') || fp.startsWith(p + path.posix.sep)));
 }

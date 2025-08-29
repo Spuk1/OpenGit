@@ -217,7 +217,7 @@ ipcMain.handle(
 ipcMain.handle(
   'oauth:bitbucket',
   async (_e, clientId: string, account: string) => {
-    if (!account) throw new Error('Bitbucket requires a username (account).');
+    // if (!account) throw new Error('Bitbucket requires a username (account).');
     const { access_token } = await oauthBitbucket(clientId, ['repository']);
     saveOAuth('bitbucket.org', 'bitbucket', account, access_token);
     return { ok: true };
