@@ -5,6 +5,7 @@
 // ContextMenu.tsx
 import { useEffect } from 'react';
 import './ContextMenu.css';
+import toast from 'react-hot-toast';
 import { useGit } from '../../ContextManager/GitContext';
 
 export default function ContextMenu({
@@ -40,7 +41,7 @@ export default function ContextMenu({
         break;
       case 'Fast-Forward':
         // window.electron.ipcRenderer.invoke('fast-forward', branch);
-        alert('Coming soon!');
+        toast.success('Coming soon!');
         break;
       case 'Pull':
         handlePull();
@@ -49,7 +50,7 @@ export default function ContextMenu({
         handlePush();
         break;
       case 'Create PR':
-        alert('Coming soon!');
+        toast.success('Coming soon!');
         // window.electron.ipcRenderer.invoke('create-pr', branch);
         break;
       case 'New Branch':
@@ -57,7 +58,7 @@ export default function ContextMenu({
         // window.electron.ipcRenderer.invoke('new-branch', branch);
         break;
       case 'Rename':
-        alert('Coming soon!');
+        toast.success('Coming soon!');
         // window.electron.ipcRenderer.invoke('rename', branch);
         break;
       case 'Delete':

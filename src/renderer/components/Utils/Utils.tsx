@@ -6,9 +6,11 @@ import {
   GoArchive,
   GoGitBranch,
 } from 'react-icons/go';
-import { LuGitBranchPlus } from 'react-icons/lu';
+import { LuGitBranchPlus, LuGithub } from 'react-icons/lu';
 import { CiFolderOn } from 'react-icons/ci';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import IconButton from '../IconButton/IconButton';
 import './Utils.css';
 import VSpacer from '../VSpacer/VSpacer';
@@ -32,10 +34,12 @@ export default function Utils() {
     handlePush,
     prepareStash,
     handleAddBranch,
+    cloneRepo,
   } = useGit();
   const [unstagedFiles, setUnstagedFiles] = useState<File[]>([]);
   const [commitMessage, setCommitMessage] = useState<string>('');
   const [newBranchName, setNewBranchName] = useState<string>('');
+  const [cloneLink, setCloneLink] = useState<string>('');
 
   const handleStash = async () => {
     const files = unstagedFiles
@@ -54,7 +58,7 @@ export default function Utils() {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast.error(error);
         setAction(GitAction.StashFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -65,7 +69,7 @@ export default function Utils() {
 
   const addBranch = () => {
     if (newBranchName.length === 0) {
-      alert('Please enter a branch name');
+      toast.error('Please enter a branch name');
       return;
     }
     window.electron.ipcRenderer
@@ -75,12 +79,13 @@ export default function Utils() {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast.error(error);
         setAction(GitAction.None);
       });
     setAction(GitAction.None);
   };
 
+  const navigate = useNavigate();
   return (
     <div className="UtilsContainer">
       <VSpacer size={3} />
@@ -104,6 +109,14 @@ export default function Utils() {
         title="Add Branch"
         Icon={LuGitBranchPlus}
         onClick={handleAddBranch}
+      />
+      <VSpacer size={10} />
+      <IconButton
+        title="Settings"
+        Icon={LuGithub}
+        onClick={() => {
+          navigate('/settings');
+        }}
       />
       {action === GitAction.Stash && (
         <Modal>
@@ -159,8 +172,10 @@ export default function Utils() {
             <span>Branch name: </span>
             <input
               type="text"
+              value={newBranchName}
               onChange={(e) => {
-                setNewBranchName(e.target.value);
+                const string = e.target.value.replaceAll(' ', '-');
+                setNewBranchName(string);
               }}
               placeholder="Branch name"
             />
@@ -171,6 +186,43 @@ export default function Utils() {
                 type="button"
                 onClick={() => {
                   addBranch();
+                }}
+              >
+                Add
+              </button>
+              <button
+                className="button"
+                type="button"
+                onClick={() => setAction(GitAction.None)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {action === GitAction.Clone && (
+        <Modal>
+          <div className="AddBranchModal">
+            <h1>Clone Repository</h1>
+            <span>Created at: </span>
+            <br />
+            <span>Link: </span>
+            <input
+              type="text"
+              value={cloneLink}
+              onChange={(e) => {
+                setCloneLink(e.target.value);
+              }}
+              placeholder="Branch name"
+            />
+            <br />
+            <div className="AddBranchButtonContainer">
+              <button
+                className="button"
+                type="button"
+                onClick={() => {
+                  cloneRepo(cloneLink);
                 }}
               >
                 Add

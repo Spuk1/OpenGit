@@ -195,8 +195,15 @@ export default class MenuBuilder {
   buildDefaultTemplate() {
     const templateDefault = [
       {
-        label: '&File',
+        label: '&General',
         submenu: [
+          {
+            label: '&Clone',
+            accelerator: 'Ctrl++Shift+C',
+            click: () => {
+              this.mainWindow.webContents.send('clone');
+            }
+          },
           {
             label: '&Open',
             accelerator: 'Ctrl+O',

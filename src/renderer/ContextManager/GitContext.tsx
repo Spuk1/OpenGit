@@ -7,6 +7,9 @@ import {
   ReactNode,
   useEffect,
 } from 'react';
+import toast from 'react-hot-toast';
+import { confirmAlert } from 'react-confirm-alert';
+import 'react-confirm-alert/src/react-confirm-alert.css';
 
 export enum GitAction {
   Commit = 'comitting',
@@ -22,6 +25,7 @@ export enum GitAction {
   AddBranch = 'adding branch',
   DeleteBranch = 'deleting',
   Pop = 'pop',
+  Clone = 'cloning',
   None = 0,
 }
 
@@ -51,6 +55,9 @@ type GitContextType = {
   unstaged: string[];
   setUnstaged: (unstaged: string[]) => void;
   handleMerge: (fromFile: string, toFile: string) => void;
+  setSelected: (value: number) => void;
+  cloneRepo: (url: string) => void;
+  selected: number;
 };
 
 const GitContext = createContext<GitContextType | undefined>(undefined);
@@ -60,6 +67,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [action, setAction] = useState<GitAction>(GitAction.None);
   const [unstaged, setUnstaged] = useState<string[]>([]);
+  const [selected, setSelected] = useState<number>(1);
 
   function addRepository(repo: string) {
     if (
@@ -141,7 +149,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast.error(error);
         setAction(GitAction.CommitFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -154,7 +162,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
     setAction(GitAction.AddBranch);
   };
 
-  const handleSelectFile = async () => {
+  const handleSelectFile = () => {
     window.electron.ipcRenderer
       .invoke('open-file-dialog')
       .then((resp) => {
@@ -164,10 +172,11 @@ export function GitProvider({ children }: { children: ReactNode }) {
         }
         return null;
       })
-      .catch(() => alert('Directory is not a valid git repository!'));
+      .catch(() => toast.error('Directory is not a valid git repository!'));
   };
 
-  const handleFetch = async () => {
+  const handleFetch = () => {
+    if (action !== GitAction.None) return;
     setAction(GitAction.Fetch);
     window.electron.ipcRenderer
       .invoke('fetch')
@@ -179,7 +188,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast.error(error);
         setAction(GitAction.FetchFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -187,7 +196,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
       });
   };
 
-  const handlePull = async () => {
+  const handlePull = () => {
     setAction(GitAction.Pull);
     window.electron.ipcRenderer
       .invoke('pull')
@@ -199,7 +208,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast.error(error);
         setAction(GitAction.PullFinished);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -208,7 +217,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
     setAction(GitAction.None);
   };
 
-  const handlePush = async (setUpstream = false) => {
+  const handlePush = (setUpstream = false) => {
     setAction(GitAction.Push);
     window.electron.ipcRenderer
       .invoke('push', setUpstream)
@@ -221,20 +230,29 @@ export function GitProvider({ children }: { children: ReactNode }) {
       })
       .catch((error: Error) => {
         if (error.message.includes('--set-upstream')) {
-          if (
-            window.confirm(
-              'Do you want to set upstream? (git push --set-upstream origin <branch>)',
-            )
-          ) {
-            handlePush(true);
-          }
+          confirmAlert({
+            title: 'Set Upstream?',
+            message: 'This will create a new remote',
+            buttons: [
+              {
+                label: 'Yes',
+                onClick: async () => {
+                  handlePush(true);
+                },
+              },
+              {
+                label: 'No',
+                onClick: () => {},
+              },
+            ],
+          });
           setAction(GitAction.PushFinshed);
           setTimeout(() => {
             setAction(GitAction.None);
           }, 100);
           return;
         }
-        alert(error);
+        toast.error(String(error));
         setAction(GitAction.PushFinshed);
         setTimeout(() => {
           setAction(GitAction.None);
@@ -255,7 +273,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         return null;
       })
       .catch((error) => {
-        alert(error);
+        toast.error(error);
       });
 
     setAction(GitAction.Stash);
@@ -272,9 +290,22 @@ export function GitProvider({ children }: { children: ReactNode }) {
         })
         .catch((err) => {
           setAction(GitAction.None);
-          alert(err);
+          toast.error(err);
         });
     }
+  }
+
+  function cloneRepo(url: string) {
+    window.electron.ipcRenderer
+      .invoke('clone-repo', url)
+      .then(() => {
+        setAction(GitAction.None);
+        return null;
+      })
+      .catch((err) => {
+        setAction(GitAction.None);
+        toast.error(err);
+      });
   }
 
   function getSelectedRepositoryFromIndex(): Repository {
@@ -305,18 +336,18 @@ export function GitProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('repositories', JSON.stringify(newRepos));
         return null;
       })
-      .catch((err) => alert(err));
+      .catch((err) => toast.error(err));
   }
 
   useEffect(() => {
     getSelectedRepository();
+    window.events.onClone(() => {
+      setAction(GitAction.Clone);
+    });
+    setTimeout(() => {
+      handleFetch();
+    }, 30000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const onFocus = () => handleFetch();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   return (
@@ -342,6 +373,9 @@ export function GitProvider({ children }: { children: ReactNode }) {
         unstaged,
         setUnstaged,
         handleMerge,
+        setSelected,
+        selected,
+        cloneRepo,
       }}
     >
       {children}
