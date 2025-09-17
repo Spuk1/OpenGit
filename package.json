@@ -104,6 +104,7 @@
     "@electron/notarize": "^3.0.0",
     "@sinm/react-file-tree": "^1.1.1",
     "diff": "^8.0.2",
+    "dotenv": "^17.2.2",
     "electron-debug": "^4.1.0",
     "electron-log": "^5.3.2",
     "electron-updater": "^6.3.9",

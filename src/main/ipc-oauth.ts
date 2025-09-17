@@ -8,11 +8,11 @@ import fs from 'fs';
 import { getRemoteInfo, isExpiringSoon } from './git-helpers';
 import { selectedRepoPath } from './ipc';
 import { loadToken, deleteToken, saveOAuth } from './auth-store';
+import 'dotenv/config';
 
-export const CLIENT_GITHUB_SECRET = '7d6aa75590a52403efd84bcbacc30db209ed522f';
-export const CLIENT_BITBUCKET_SECRET = 'CGPN5JAtxVcwwJFcBhGjP9XULn52FmDY';
-export const GITHUB_CLIENT_ID = 'Ov23li1TTgR1Gd0z6Kz0';
-export const BITBUCKET_CLIENT_ID = 'tahK9D9DZHATRZkYGk';
+export const CLIENT_GITHUB_SECRET =  process.env.CLIENT_GITHUB_SECRET !== undefined ? process.env.CLIENT_GITHUB_SECRET : "";
+export const CLIENT_BITBUCKET_SECRET = process.env.CLIENT_BITBUCKET_SECRET !== undefined ? process.env.CLIENT_BITBUCKET_SECRET : "";
+
 
 export default function init() {}
 
@@ -132,6 +132,7 @@ async function oauthBitbucket(
   if (error) throw new Error(error);
   if (!code || retState !== state)
     throw new Error('OAuth: code/state mismatch');
+
 
   const form = new URLSearchParams({
     grant_type: 'authorization_code',
