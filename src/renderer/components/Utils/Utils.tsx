@@ -34,10 +34,12 @@ export default function Utils() {
     handlePush,
     prepareStash,
     handleAddBranch,
+    cloneRepo,
   } = useGit();
   const [unstagedFiles, setUnstagedFiles] = useState<File[]>([]);
   const [commitMessage, setCommitMessage] = useState<string>('');
   const [newBranchName, setNewBranchName] = useState<string>('');
+  const [cloneLink, setCloneLink] = useState<string>('');
 
   const handleStash = async () => {
     const files = unstagedFiles
@@ -82,6 +84,7 @@ export default function Utils() {
       });
     setAction(GitAction.None);
   };
+
   const navigate = useNavigate();
   return (
     <div className="UtilsContainer">
@@ -183,6 +186,43 @@ export default function Utils() {
                 type="button"
                 onClick={() => {
                   addBranch();
+                }}
+              >
+                Add
+              </button>
+              <button
+                className="button"
+                type="button"
+                onClick={() => setAction(GitAction.None)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {action === GitAction.Clone && (
+        <Modal>
+          <div className="AddBranchModal">
+            <h1>Clone Repository</h1>
+            <span>Created at: </span>
+            <br />
+            <span>Link: </span>
+            <input
+              type="text"
+              value={cloneLink}
+              onChange={(e) => {
+                setCloneLink(e.target.value);
+              }}
+              placeholder="Branch name"
+            />
+            <br />
+            <div className="AddBranchButtonContainer">
+              <button
+                className="button"
+                type="button"
+                onClick={() => {
+                  cloneRepo(cloneLink);
                 }}
               >
                 Add

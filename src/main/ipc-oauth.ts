@@ -5,12 +5,14 @@ import crypto from 'crypto';
 import * as git from 'isomorphic-git';
 import httpClient from 'isomorphic-git/http/node';
 import fs from 'fs';
-import { getRemoteInfo } from './git-helpers';
+import { getRemoteInfo, isExpiringSoon } from './git-helpers';
 import { selectedRepoPath } from './ipc';
 import { loadToken, deleteToken, saveOAuth } from './auth-store';
 
-const CLIENT_GITHUB_SECRET = '7d6aa75590a52403efd84bcbacc30db209ed522f';
-const CLIENT_BITBUCKET_SECRET = 'CGPN5JAtxVcwwJFcBhGjP9XULn52FmDY'
+export const CLIENT_GITHUB_SECRET = '7d6aa75590a52403efd84bcbacc30db209ed522f';
+export const CLIENT_BITBUCKET_SECRET = 'CGPN5JAtxVcwwJFcBhGjP9XULn52FmDY';
+export const GITHUB_CLIENT_ID = 'Ov23li1TTgR1Gd0z6Kz0';
+export const BITBUCKET_CLIENT_ID = 'tahK9D9DZHATRZkYGk';
 
 export default function init() {}
 
@@ -99,7 +101,6 @@ async function oauthGithub(
     }),
   });
   const json = await resp.json();
-  console.log(json);
   if (!resp.ok || !json.access_token)
     throw new Error(json.error_description || 'GitHub token exchange failed');
   return { access_token: json.access_token };
@@ -111,7 +112,7 @@ async function oauthGithub(
 async function oauthBitbucket(
   clientId: string,
   scopes: string[] = ['repository'],
-): Promise<{ access_token: string; refresh_token?: string }> {
+): Promise<{ access_token: string; refresh_token?: string; expires_at:number }> {
   const port = 6969;
   const redirect_uri = `http://127.0.0.1:${port}/oauth/callback`;
   const state = b64url(crypto.randomBytes(16));
@@ -147,11 +148,56 @@ async function oauthBitbucket(
   });
   const json = await resp.json();
   if (!resp.ok || !json.access_token)
-    throw new Error(
-      json.error_description || 'Bitbucket token exchange failed',
-    );
-  return { access_token: json.access_token, refresh_token: json.refresh_token };
+    throw new Error(json.error_description || 'Bitbucket token exchange failed');
+
+  // Bitbucket returns expires_in (seconds). Save an expiry a bit early (−60s).
+  const expires_at = Date.now() + Math.max(0, (Number(json.expires_in ?? 7200) - 60)) * 1000;
+
+  return {
+    access_token: json.access_token,
+    refresh_token: json.refresh_token,
+    expires_at,
+  };
 }
+
+async function refreshBitbucketToken(opts: {
+  clientId: string;
+  clientSecret: string;
+  refresh_token: string;
+}): Promise<{ access_token: string; refresh_token?: string; expires_at?: number }> {
+  const form = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: opts.refresh_token,
+  });
+
+  const resp = await fetch('https://bitbucket.org/site/oauth2/access_token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      // Basic auth: client_id:client_secret
+      Authorization:
+        'Basic ' + Buffer.from(`${opts.clientId}:${opts.clientSecret}`).toString('base64'),
+    },
+    body: form,
+  });
+
+  const json = await resp.json();
+  if (!resp.ok || !json.access_token) {
+    // Common failure: invalid_grant (refresh token revoked/rotated)
+    const msg = json.error_description || json.error || 'Bitbucket refresh failed';
+    throw new Error(msg);
+  }
+
+  const expires_at = Date.now() + Math.max(0, (Number(json.expires_in ?? 7200) - 60)) * 1000;
+
+  return {
+    access_token: json.access_token,
+    // Bitbucket often rotates the refresh_token. Use the new one if provided.
+    refresh_token: json.refresh_token,
+    expires_at,
+  };
+}
+
 
 /* ---------------------- IPCs requested by your UI -------------------------- */
 
@@ -171,37 +217,45 @@ ipcMain.handle('auth:delete', async (_e, host: string, account: string) => {
   deleteToken(host, account);
 });
 
-/** test(host, account) → { ok: boolean, error?: string }  (does ls-remote with OAuth) */
-ipcMain.handle('auth:test', async (_e, host: string, account: string) => {
+
+ipcMain.handle('auth:test', async (_e, host: string, account: string, clientId?: string) => {
   try {
     const { url } = await getRemoteInfo(selectedRepoPath!);
-    const rec = loadToken(host, account);
-    if (!rec?.token)
-      return { ok: false, error: 'No token saved for this host/account.' };
 
-    // isomorphic-git OAuth
-    const onAuth = async () => {
-      const provider =
-        host === 'github.com'
-          ? 'github'
-          : host === 'bitbucket.org'
-            ? 'bitbucket'
-            : null;
-      if (!provider) throw new Error(`Unsupported host for OAuth: ${host}`);
-      return { oauth2format: provider as any, token: rec.token };
-    };
+    let token: string | null = null;
+
+    if (host === 'bitbucket.org') {
+      if (!clientId) throw new Error('Bitbucket clientId is required to test/refresh.');
+      token = await getValidAccessTokenForBitbucket(host, account, clientId);
+    } else {
+      // GitHub: your existing logic (GitHub PKCE flow here doesn’t issue refresh tokens for classic OAuth apps;
+      // if you add GitHub refresh later, mirror the same pattern).
+      const rec = loadToken(host, account);
+      if (!rec?.token) return { ok: false, error: 'No token saved for this host/account.' };
+      token = rec.token;
+    }
+
+    const provider =
+      host === 'github.com'
+        ? 'github'
+        : host === 'bitbucket.org'
+          ? 'bitbucket'
+          : null;
+    if (!provider) throw new Error(`Unsupported host for OAuth: ${host}`);
 
     await git.listServerRefs({
       fs: fs as any,
       http: httpClient,
       url,
-      onAuth,
+      onAuth: async () => ({ oauth2format: provider as any, token: token! }),
     });
+
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || String(e) };
   }
 });
+
 
 /** oauthGithub(clientId, account='git') → { ok: true } */
 ipcMain.handle(
@@ -217,27 +271,41 @@ ipcMain.handle(
 ipcMain.handle(
   'oauth:bitbucket',
   async (_e, clientId: string, account: string) => {
-    // if (!account) throw new Error('Bitbucket requires a username (account).');
-    const { access_token } = await oauthBitbucket(clientId, ['repository']);
-    saveOAuth('bitbucket.org', 'bitbucket', account, access_token);
+    const { access_token, refresh_token, expires_at } =
+      await oauthBitbucket(clientId, ['repository']);
+
+    // Save ALL pieces so we can refresh later
+    saveOAuth('bitbucket.org', 'bitbucket', account, access_token, refresh_token!, expires_at);
     return { ok: true };
   },
 );
 
-/* ----------------- OPTIONAL: helper your fetch/push use -------------------- */
-/* Example: use OAuth automatically for git.fetch / git.push elsewhere
+async function getValidAccessTokenForBitbucket(host: string, account: string, clientId: string) {
+  const rec = loadToken(host, account); // expect rec: { token, refresh_token?, expires_at?, provider }
+  if (!rec?.token) throw new Error('No token saved for this host/account.');
 
-async function onAuthFactory(dir: string, accountHint?: string) {
-  const { host } = await getRemoteInfo(dir);
-  return async () => {
-    const account = host === 'github.com' ? (accountHint || 'git') : (accountHint || '');
-    const rec = loadToken(host, account);
-    if (!rec?.token) return {};
-    const provider = host === 'github.com' ? 'github'
-                  : host === 'bitbucket.org' ? 'bitbucket'
-                  : null;
-    if (!provider) return {};
-    return { oauth2format: provider as any, token: rec.token };
-  };
+  // If not close to expiry, use it
+  if (!isExpiringSoon(rec.expires_at)) return rec.token;
+
+  // Try to refresh if we have a refresh_token
+  if (rec.refresh_token) {
+    try {
+      const { access_token, refresh_token, expires_at } = await refreshBitbucketToken({
+        clientId,
+        clientSecret: CLIENT_BITBUCKET_SECRET,
+        refresh_token: rec.refresh_token,
+      });
+
+      // Persist rotated tokens/expiry
+      saveOAuth('bitbucket.org', 'bitbucket', account, access_token, refresh_token ?? rec.refresh_token, expires_at);
+
+      return access_token;
+    } catch (e: any) {
+      // If refresh fails (revoked/rotated), fall back to forcing re-auth
+      throw new Error(`Bitbucket token refresh failed: ${e?.message || e}`);
+    }
+  }
+
+  // No refresh_token → require re-auth
+  throw new Error('Bitbucket token expired and no refresh token is available. Please sign in again.');
 }
-*/

@@ -31,7 +31,8 @@ export type Channels =
   | 'get-repositories'
   | 'merge-branch'
   | 'get-commit-log'
-  | 'save-repositories';
+  | 'save-repositories'
+  | "clone-repo";
 
 
 const electronHandler = {
@@ -85,9 +86,17 @@ contextBridge.exposeInMainWorld('authAPI', {
     ipcRenderer.invoke('git:set-identity', name, email),
 } as AuthAPI);
 
+
+contextBridge.exposeInMainWorld("events", {
+  onClone: (cb: () => void) => ipcRenderer.on("clone", cb)
+})
+
 declare global {
   interface Window {
     authAPI: AuthAPI;
+    events: {
+      onClone: (cb: () => void) => () => void;
+    }
   }
 }
 

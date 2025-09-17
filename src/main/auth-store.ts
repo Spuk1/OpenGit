@@ -11,6 +11,8 @@ type VaultEntry = {
   enc_b64: string; // <- base64 of safeStorage.encryptString(token)
   type: 'oauth';
   provider: 'github' | 'bitbucket';
+  refresh_token: string;
+  expires_at: number;
 };
 type Vault = Record<string, VaultEntry>;
 const key = (host: string, account: string) => `${host}:${account}`;
@@ -55,6 +57,8 @@ export function saveOAuth(
   provider: 'github' | 'bitbucket',
   account: string,
   token: string,
+  refresh_token: string = "",
+  expires_at: number = 0
 ) {
   const vault = readVault();
   const encBuf = safeStorage.encryptString(token); // Buffer
@@ -64,6 +68,8 @@ export function saveOAuth(
     enc_b64: encBuf.toString('base64'), // <- base64
     type: 'oauth',
     provider,
+    refresh_token,
+    expires_at
   };
   writeVault(vault);
 }
@@ -71,11 +77,12 @@ export function saveOAuth(
 export function loadToken(
   host: string,
   account: string,
-): { token: string; provider: 'github' | 'bitbucket' } | null {
+): { token: string; provider: 'github' | 'bitbucket', refresh_token: string, expires_at: number } | null {
   const vault = readVault();
   const entry = vault[key(host, account)];
   if (!entry) return null;
-
+  let refresh_token = entry.refresh_token;
+  let expires_at = entry.expires_at;
   // Handle both new (enc_b64) and very old (enc) shapes for migration
   const encB64 = (entry as any).enc_b64 ?? (entry as any).enc;
   if (!encB64) return null;
@@ -83,12 +90,12 @@ export function loadToken(
   try {
     const buf = Buffer.from(encB64, 'base64');
     const token = safeStorage.decryptString(buf);
-    return { token, provider: entry.provider };
+    return { token, provider: entry.provider, refresh_token, expires_at };
   } catch {
     // Last-ditch: if older code stored raw Buffer.toString() (utf8), try without base64
     try {
       const token = safeStorage.decryptString(Buffer.from(encB64));
-      return { token, provider: entry.provider };
+      return { token, provider: entry.provider, refresh_token, expires_at };
     } catch {
       return null;
     }

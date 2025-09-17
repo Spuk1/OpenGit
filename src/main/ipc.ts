@@ -4,9 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
-import { discoverPaths, getRemoteInfo, getSubmodulePaths, insideAnySubmodule, isBinary, listPaths, onAuthFactory, readSpec, TreeSpec } from './git-helpers';
+import { discoverPaths, getRemoteInfo, getSubmodulePaths, insideAnySubmodule, isBinary, listPaths, onAuthFactory, readSpec, toRefIdx, TreeSpec } from './git-helpers';
 import { getIdentity, setIdentity } from './git-identity';
 import { createTwoFilesPatch } from 'diff';
+import { refreshBitbucketToken } from './ipc-oauth';
 
 export let selectedRepoPath: string | null = '';
 
@@ -186,6 +187,7 @@ ipcMain.handle('pull', async () => {
       dir: selectedRepoPath!,
       ref: branch,
       singleBranch: true,
+      author: { name, email },
       onAuth,
     });
   } finally {
@@ -311,7 +313,7 @@ ipcMain.handle('list-changes', async () => {
     const matrix = await git.statusMatrix({
       fs, dir,
       // Skip files *within* submodules; keep the root path (gitlink) and everything else
-      filter: (fp /*: string*/) => !insideAnySubmodule(fp, submods),
+      filter: (fp /*: string*/) => !insideAnySubmodule(fp, submods) && !fp.startsWith("test"),
     });
 
     // statusMatrix rows: [filepath, HEAD, WORKDIR, STAGE]
@@ -410,65 +412,94 @@ async function parentsOf(dir: string, oid: string): Promise<string[]> {
   return commit.parent || [];
 }
 
-// Bidirectional search to find meeting point and counts
-async function aheadBehindBidirectional(dir: string, a: string, b: string, maxExpand = 5000) {
-  if (a === b) return { ahead: 0, behind: 0 };
+// --- helpers ---
+async function isDesc(dir: string, oid: string, ancestor: string) {
+  try {
+    // true if `ancestor` is an ancestor of `oid`
+    return await git.isDescendent({ fs, dir, oid, ancestor, cache: gitCache })
+  } catch {
+    return false
+  }
+}
 
-  const seenA = new Set<string>();
-  const seenB = new Set<string>();
-  const qa: string[] = [a];
-  const qb: string[] = [b];
+async function countUntilStops(
+  dir: string,
+  tip: string,
+  stop: Set<string>,
+  cap = 20000
+) {
+  // DFS counting unique commits reachable from `tip` that are NOT in `stop`
+  const seen = new Set<string>()
+  const stack = [tip]
+  let count = 0
 
-  seenA.add(a);
-  seenB.add(b);
+  while (stack.length && seen.size < cap) {
+    const cur = stack.pop()!
+    if (seen.has(cur) || stop.has(cur)) continue
+    seen.add(cur)
+    count++
+    const parents = await parentsOf(dir, cur)
+    for (const p of parents) if (!seen.has(p)) stack.push(p)
+  }
+  // do not count the stop nodes themselves
+  return count
+}
 
-  let expanded = 0;
+// --- accurate ahead/behind with ancestry fast-path ---
+async function aheadBehindAccurate(dir: string, a: string, b: string) {
+  if (a === b) return { ahead: 0, behind: 0 }
 
-  while ((qa.length || qb.length) && expanded < maxExpand) {
-    // step A
+  // Fast paths (most real-world branch comparisons)
+  if (await isDesc(dir, a, b)) {
+    // local A contains remote B -> we’re only ahead
+    const ahead = await countUntilStops(dir, a, new Set([b]))
+    return { ahead, behind: 0 }
+  }
+  if (await isDesc(dir, b, a)) {
+    // remote B contains local A -> we’re only behind
+    const behind = await countUntilStops(dir, b, new Set([a]))
+    return { ahead: 0, behind }
+  }
+
+  // General case: compute set differences of ancestors(A) vs ancestors(B)
+  // with pruning when we cross into the other set.
+  const seenA = new Set<string>()
+  const seenB = new Set<string>()
+  const qa: string[] = [a]
+  const qb: string[] = [b]
+  const CAP = 50000
+
+  while ((qa.length || qb.length) && (seenA.size + seenB.size) < CAP) {
     if (qa.length) {
-      const cur = qa.pop()!;
-      const ps = await parentsOf(dir, cur);
-      for (const p of ps) {
-        if (!seenA.has(p)) {
-          if (seenB.has(p)) {
-            // meet at p: commits unique to A side are seenA.size-1; to B side are seenB.size-1
-            const ahead = seenA.size;   // includes 'a' and unique visited on A
-            const behind = seenB.size;  // includes 'b' and unique visited on B
-            // We stepped to parent 'p' which belongs to both; don’t count it for either side
-            return { ahead: ahead - 1, behind: behind - 1 };
-          }
-          seenA.add(p);
-          qa.push(p);
+      const cur = qa.pop()!
+      if (!seenA.has(cur)) {
+        seenA.add(cur)
+        if (!seenB.has(cur)) {
+          const ps = await parentsOf(dir, cur)
+          for (const p of ps) if (!seenA.has(p)) qa.push(p)
         }
       }
-      expanded++;
-      if (expanded >= maxExpand) break;
     }
-
-    // step B
     if (qb.length) {
-      const cur = qb.pop()!;
-      const ps = await parentsOf(dir, cur);
-      for (const p of ps) {
-        if (!seenB.has(p)) {
-          if (seenA.has(p)) {
-            const ahead = seenA.size;
-            const behind = seenB.size;
-            return { ahead: ahead - 1, behind: behind - 1 };
-          }
-          seenB.add(p);
-          qb.push(p);
+      const cur = qb.pop()!
+      if (!seenB.has(cur)) {
+        seenB.add(cur)
+        if (!seenA.has(cur)) {
+          const ps = await parentsOf(dir, cur)
+          for (const p of ps) if (!seenB.has(p)) qb.push(p)
         }
       }
-      expanded++;
     }
   }
 
-  // If we didn’t meet within cap, approximate with counts so far.
-  // This keeps it fast and bounded.
-  return { ahead: Math.max(0, seenA.size - 1), behind: Math.max(0, seenB.size - 1) };
+  let ahead = 0, behind = 0
+  for (const x of seenA) if (!seenB.has(x)) ahead++
+  for (const x of seenB) if (!seenA.has(x)) behind++
+
+  return { ahead, behind }
 }
+
+
 
 ipcMain.handle('get-branch-revs', async (_e, branch: string, remote = 'origin') => {
   assertRepo();
@@ -496,10 +527,9 @@ ipcMain.handle('get-branch-revs', async (_e, branch: string, remote = 'origin') 
     }
 
     // fast bidirectional search with a hard cap
-    const { ahead, behind } = await aheadBehindBidirectional(dir, a, b, 6000);
-
-    memo.set(key, { ts: now, ahead, behind });
-    return `${behind}\t${ahead}`; // matches `git rev-list --left-right --count origin/branch...branch`
+    const { ahead, behind } = await aheadBehindAccurate(dir, a, b)
+    memo.set(key, { ts: now, ahead, behind })
+    return `${behind}\t${ahead}`
   } finally {
     console.log(`get-branch-revs (bi) took ${Math.round(performance.now() - start)}ms`);
   }
@@ -518,6 +548,7 @@ ipcMain.handle('delete-branch', async (_e, branch: string, remote: boolean) => {
     if (remote) {
       // Remote delete via push refspec ":branch" equivalent
       // isomorphic-git supports deleting by setting remoteRef and 'delete' option.
+      const onAuth = await onAuthFactory(selectedRepoPath!);
       await git.push({
         fs,
         http,
@@ -757,5 +788,33 @@ ipcMain.handle('get-commit-log', async ()=> {
     return log;
   } finally {
     console.log(`get-commit-log took ${performance.now() - start}ms`);
+  }
+})
+
+
+ipcMain.handle("clone-repo", async (_e, url : string) => {
+  const start = performance.now();
+  let split = url.split("/")
+  let name = split[split.length-1].replace(".git", "");
+  try {
+    assertRepo();
+    const onAuth = await onAuthFactory(selectedRepoPath!, url);
+    const resp = await git.clone({
+      fs,
+      dir: "/home/leon/projects/"+name,
+      http,
+      url,
+      onAuth,
+      singleBranch: true,
+      depth: 1,
+      }
+    )
+    console.log(resp)
+  }
+  catch (error) {
+    console.log(error);
+  }
+  finally {
+    console.log(`clone-repo took ${performance.now() - start}ms`);
   }
 })

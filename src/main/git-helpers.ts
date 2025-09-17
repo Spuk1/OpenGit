@@ -1,7 +1,9 @@
 import * as git from 'isomorphic-git';
 import fs from 'fs';
-import { loadToken } from './auth-store';
+import { loadToken, saveOAuth } from './auth-store';
+import "./ipc-oauth";
 import path from 'path';
+import { BITBUCKET_CLIENT_ID, CLIENT_BITBUCKET_SECRET } from './ipc-oauth';
 
 export function normalizeRemoteUrl(url: string) {
   // git@github.com:owner/repo.git -> https://github.com/owner/repo.git
@@ -13,30 +15,119 @@ export function normalizeRemoteUrl(url: string) {
 export async function getRemoteInfo(dir: string, remote = 'origin') {
   const url =
     (await git.getConfig({ fs, dir, path: `remote.${remote}.url` })) ?? '';
-  console.log(url)
   const httpsUrl = normalizeRemoteUrl(url);
   const { host } = new URL(httpsUrl); // 'github.com' | 'bitbucket.org' | '<bb-server>'
   return { url: httpsUrl, host };
 }
 
-// main/git-helpers.ts (snippet)
-export async function onAuthFactory(dir: string, preferredAccount?: string) {
-  const { host } = await getRemoteInfo(dir);
-  return async () => {
-    const account = preferredAccount || (host === 'github.com' ? 'git' : '');
-    const rec = loadToken(host, account);
-    console.log(rec)
-    if (!rec?.token) return {};
-    if (rec.type === 'oauth') {
-      // isomorphic-git OAuth
-      const provider = host === 'github.com' ? 'github' : 'bitbucket';
-      return { oauth2format: provider as any, token: rec.token };
-    }
-    // fallback to basic (PAT/app password)
-    return { username: account || 'git', password: rec.token };
+async function refreshBitbucketToken(opts: {
+  clientId: string;
+  clientSecret: string;
+  refresh_token: string;
+}) {
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: opts.refresh_token,
+  });
+
+  const resp = await fetch('https://bitbucket.org/site/oauth2/access_token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization:
+        'Basic ' +
+        Buffer.from(`${opts.clientId}:${opts.clientSecret}`).toString('base64'),
+    },
+    body,
+  });
+
+  const json = await resp.json();
+  if (!resp.ok || !json.access_token) {
+    const msg = json.error_description || json.error || 'Bitbucket refresh failed';
+    throw new Error(msg);
+  }
+
+  const expires_at =
+    Date.now() + Math.max(0, (Number(json.expires_in ?? 7200) - 60)) * 1000;
+
+  return {
+    access_token: json.access_token as string,
+    refresh_token: (json.refresh_token as string) || undefined, // may rotate
+    expires_at,
   };
 }
 
+async function ensureBitbucketAccessToken(host: string, account: string, clientId: string, clientSecret: string) {
+  const rec = loadToken(host, account);
+  if (!rec?.token) throw new Error('No token saved for this host/account.');
+
+  // If not near expiry, use as-is
+  if (!isExpiringSoon(rec.expires_at)) return rec.token as string;
+
+  if (!rec.refresh_token) {
+    throw new Error('Bitbucket token expired and no refresh token is available.');
+  }
+
+  const { access_token, refresh_token, expires_at } = await refreshBitbucketToken({
+    clientId,
+    clientSecret,
+    refresh_token: rec.refresh_token,
+  });
+
+  // Persist rotation & new expiry
+  saveOAuth(host, 'bitbucket', account, access_token, refresh_token ?? rec.refresh_token, expires_at);
+
+  return access_token;
+}
+
+// Factory with refresh support for Bitbucket
+export async function onAuthFactory(
+  dir: string,
+  url: string = '',
+  preferredAccount?: string,
+  opts?: { bitbucketClientId?: string; bitbucketClientSecret?: string }
+) {
+  let host: string;
+  if (url === '') {
+    host = (await getRemoteInfo(dir)).host;
+  } else {
+    const httpsUrl = normalizeRemoteUrl(url);
+    host = new URL(httpsUrl).host; // 'github.com' | 'bitbucket.org' | '<bb-server>'
+  }
+
+  return async () => {
+    const account = preferredAccount || (host === 'github.com' ? 'git' : '');
+    const rec = loadToken(host, account);
+    if (!rec?.token) return {};
+
+    // Bitbucket with OAuth (+refresh)
+    if (rec.provider === 'bitbucket' && host === 'bitbucket.org') {
+      const clientId = opts?.bitbucketClientId || BITBUCKET_CLIENT_ID;
+      const clientSecret = opts?.bitbucketClientSecret || CLIENT_BITBUCKET_SECRET;
+      if (!clientId || !clientSecret) {
+        // Fall back to current token if no creds to refresh
+        return { oauth2format: 'bitbucket' as const, token: rec.token };
+      }
+
+      let token = rec.token as string;
+      try {
+        if (isExpiringSoon(rec.expires_at)) {
+          token = await ensureBitbucketAccessToken(host, account, clientId, clientSecret);
+        }
+      } catch (e) {
+        // If refresh fails, still try with current token; the Git op may 401 and your UI can prompt re-auth.
+        console.warn('Bitbucket refresh failed:', e);
+      }
+
+      // return { oauth2format: 'bitbucket' as const, token };
+      return {username: 'x-token-auth',
+        password: token }
+    }
+
+    // GitHub OAuth token via isomorphic-git (no refresh here) or PAT/basic for anything else
+    return { username: account || 'git', password: rec.token };
+  };
+}
 
 export type TreeSpec = 'HEAD' | 'INDEX' | 'WORKDIR' | string;
 
@@ -136,4 +227,33 @@ export function getSubmodulePaths(dir: string): string[] {
 export function insideAnySubmodule(fp: string, submods: string[]) {
   // inside if it startsWith "<path>/" (strictly deeper than the root)
   return submods.some((p) => fp !== p && (fp.startsWith(p + '/') || fp.startsWith(p + path.posix.sep)));
+}
+
+export function isExpiringSoon(expires_at?: number, skewMs = 60_000): boolean {
+  if (!expires_at) return true; // no expiry info → treat as expiring
+  return Date.now() >= (expires_at - skewMs);
+}
+
+export function toRefIdx(input: string | number | undefined, fallback = 0): number {
+  if (typeof input === 'number' && Number.isInteger(input) && input >= 0) return input;
+
+  if (typeof input === 'string') {
+    const s = input.trim();
+
+    // "stash@{N}"
+    let m = s.match(/^stash@{\s*(\d+)\s*}$/i);
+    if (m) return parseInt(m[1], 10);
+
+    // "refs/stash@{N}" (sometimes shown in UIs)
+    m = s.match(/^refs\/stash@{\s*(\d+)\s*}$/i);
+    if (m) return parseInt(m[1], 10);
+
+    // plain integer string
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+
+    // aliases for the newest stash
+    if (/^(latest|head|top)$/i.test(s)) return 0;
+  }
+
+  return fallback; // let isomorphic-git error if out-of-range later
 }

@@ -25,6 +25,7 @@ export enum GitAction {
   AddBranch = 'adding branch',
   DeleteBranch = 'deleting',
   Pop = 'pop',
+  Clone = 'cloning',
   None = 0,
 }
 
@@ -55,6 +56,7 @@ type GitContextType = {
   setUnstaged: (unstaged: string[]) => void;
   handleMerge: (fromFile: string, toFile: string) => void;
   setSelected: (value: number) => void;
+  cloneRepo: (url: string) => void;
   selected: number;
 };
 
@@ -293,6 +295,19 @@ export function GitProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function cloneRepo(url: string) {
+    window.electron.ipcRenderer
+      .invoke('clone-repo', url)
+      .then(() => {
+        setAction(GitAction.None);
+        return null;
+      })
+      .catch((err) => {
+        setAction(GitAction.None);
+        toast.error(err);
+      });
+  }
+
   function getSelectedRepositoryFromIndex(): Repository {
     if (repositories.length === 0) {
       return {
@@ -326,6 +341,9 @@ export function GitProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     getSelectedRepository();
+    window.events.onClone(() => {
+      setAction(GitAction.Clone);
+    });
     setTimeout(() => {
       handleFetch();
     }, 30000);
@@ -357,6 +375,7 @@ export function GitProvider({ children }: { children: ReactNode }) {
         handleMerge,
         setSelected,
         selected,
+        cloneRepo,
       }}
     >
       {children}

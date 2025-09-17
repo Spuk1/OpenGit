@@ -93,12 +93,7 @@ export default function AuthPanel() {
     if (!remote) return;
     try {
       setBusy(true);
-      const acc = ghHost ? 'git' : account || '';
-      if (!acc)
-        return setMsg({
-          text: 'No account selected to disconnect.',
-          tone: 'err',
-        });
+      const acc = '';
       await window.authAPI.del(remote.host, acc);
       setConnected(false);
       setMsg({ text: 'Signed out (local token removed).', tone: 'ok' });
@@ -117,7 +112,7 @@ export default function AuthPanel() {
     try {
       setBusy(true);
       const acc = ghHost ? 'git' : account || '';
-      
+
       const r = await window.authAPI.test(remote.host, acc);
       setMsg(
         r.ok
@@ -244,11 +239,7 @@ export default function AuthPanel() {
           <button style={btn} disabled={busy || !remote} onClick={test}>
             Test Connection
           </button>
-          <button
-            style={btn}
-            disabled={busy || !remote || !connected}
-            onClick={disconnect}
-          >
+          <button style={btn} onClick={disconnect}>
             Sign out
           </button>
           <span
